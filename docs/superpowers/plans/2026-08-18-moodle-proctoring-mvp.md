@@ -4,9 +4,9 @@
 
 **Goal:** Deliver a Moodle 4.3.3 proctoring MVP with web biometric controls, optional native SEB, encrypted evidence, human-review alerts, and course-scoped reports.
 
-**Architecture:** Moodle owns identities, courses, quizzes, attempts, native SEB configuration and gradebook data. A PHP local plugin creates proctoring sessions through a server-to-server JavaScript API. The student web client performs lightweight facial checks locally; the API, workers, PostgreSQL, Redis and encrypted object storage preserve evidence and alerts without modifying grades.
+**Architecture:** Moodle owns identities, courses, quizzes, attempts, native SEB configuration and gradebook data. A PHP local plugin creates proctoring sessions through a server-to-server JavaScript API. The student web client performs lightweight facial checks locally; MySQL stores operational data and queued work, a local JavaScript worker processes jobs, and encrypted evidence is stored outside Apache's public directory without modifying grades.
 
-**Tech Stack:** JavaScript, Node.js 22, Fastify, Zod, PostgreSQL 16, Redis 7, BullMQ, Next.js, Vitest, Playwright, Moodle PHP 8.1+, PHPUnit, Docker Compose, `@vladmandic/human`.
+**Tech Stack:** JavaScript, Node.js 22, Fastify, Zod, MySQL 8, Next.js, Vitest, Playwright, Moodle PHP 8.1+, PHPUnit, Apache, `@vladmandic/human`.
 
 **Spec:** `docs/superpowers/specs/2026-08-18-moodle-proctoring-mvp-design.md`
 
@@ -19,7 +19,7 @@
 - The API never reads Moodle database tables directly.
 - Alerts are human-review evidence and never modify Moodle grades.
 - Do not record continuous video or infer emotion.
-- Encrypt evidence and biometric descriptors in transit and at rest; audit every administrative evidence access.
+- Encrypt evidence and biometric descriptors in transit and at rest; store local evidence outside Apache's public directory; audit every administrative evidence access.
 - Apply course scope and capabilities in the API, not just in the UI.
 
 ---

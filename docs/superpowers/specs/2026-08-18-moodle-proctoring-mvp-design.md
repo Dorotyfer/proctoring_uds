@@ -42,12 +42,12 @@ Plataforma de proctoring
 ├─ API JavaScript: sesiones, eventos, alertas, evidencia y permisos
 ├─ Cliente web: preparación, cámara y análisis local
 ├─ Workers JavaScript: validaciones diferidas y alertas
-├─ Base de datos PostgreSQL: metadatos operacionales
-├─ Redis: cola y eventos asíncronos
-└─ Almacenamiento de objetos: evidencia cifrada
+├─ Base de datos MySQL: metadatos operacionales y trabajos asíncronos
+├─ Worker local JavaScript: procesa trabajos desde MySQL
+└─ Almacenamiento local fuera de Apache: evidencia cifrada
 ```
 
-Moodle conserva usuarios, cursos, cuestionarios e intentos. La plataforma guarda identificadores Moodle y sus propios datos; no consulta las tablas de Moodle.
+Moodle conserva usuarios, cursos, cuestionarios e intentos. La plataforma guarda identificadores Moodle y sus propios datos en MySQL; no consulta las tablas de Moodle. Apache sirve Moodle y las aplicaciones web, pero nunca expone directamente los archivos de evidencia.
 
 ## Flujo de sesión
 
