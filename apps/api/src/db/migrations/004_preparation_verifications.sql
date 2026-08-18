@@ -1,6 +1,13 @@
 ALTER TABLE proctoring_preparation_submissions
   ADD COLUMN submission_id CHAR(36) NULL AFTER session_id;
 
+UPDATE proctoring_preparation_submissions
+  SET submission_id = UUID()
+  WHERE submission_id IS NULL;
+
+ALTER TABLE proctoring_preparation_submissions
+  MODIFY COLUMN submission_id CHAR(36) NOT NULL;
+
 CREATE TABLE proctoring_preparation_verifications (
   session_id CHAR(36) NOT NULL PRIMARY KEY,
   submission_id CHAR(36) NOT NULL,
