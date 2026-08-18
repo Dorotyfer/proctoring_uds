@@ -7,12 +7,11 @@
   },
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up --detach --wait --wait-timeout 60",
-    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
-    "infra:check": "node --env-file=.env scripts/check-infra.mjs"
+    "infra:check": "node --env-file=.env scripts/check-infra.mjs",
+    "test:infra": "node --test scripts/check-infra.test.mjs",
+    "test": "pnpm --filter @proctoring/contracts test && pnpm --filter @proctoring/api test && pnpm test:infra"
   },
   "devDependencies": {
-    "pg": "^8.16.3",
-    "redis": "^5.8.1"
+    "mysql2": "^3.14.4"
   }
 }

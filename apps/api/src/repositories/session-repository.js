@@ -4,7 +4,7 @@ export class SessionRepository {
   }
 
   async create(session) {
-    const result = await this.database.query(
+    await this.database.execute(
       `INSERT INTO proctoring_sessions (
         id,
         moodle_user_id,
@@ -16,18 +16,7 @@ export class SessionRepository {
         issued_at,
         expires_at,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING
-        id,
-        moodle_user_id AS "moodleUserId",
-        moodle_course_id AS "moodleCourseId",
-        moodle_quiz_id AS "moodleQuizId",
-        moodle_attempt_id AS "moodleAttemptId",
-        device_mode AS "deviceMode",
-        status,
-        issued_at AS "issuedAt",
-        expires_at AS "expiresAt",
-        created_at AS "createdAt"`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
         session.moodleUserId,
@@ -42,6 +31,6 @@ export class SessionRepository {
       ]
     );
 
-    return result.rows[0];
+    return session;
   }
 }

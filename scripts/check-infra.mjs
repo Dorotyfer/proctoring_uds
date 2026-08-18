@@ -1,55 +1,22 @@
-const dependencies = [
-  ['PostgreSQL', checkPostgres],
-  ['Redis', checkRedis],
-  ['MinIO', checkMinio]
-];
+const dependencies = [['MySQL', checkMySql]];
 
-const postgresPort = process.env.POSTGRES_PORT || '5432';
-const redisPort = process.env.REDIS_PORT || '6379';
-const minioApiPort = process.env.MINIO_API_PORT || '9000';
-const databaseUrl = process.env.DATABASE_URL || `postgresql://${process.env.POSTGRES_USER || 'proctoring'}:${process.env.POSTGRES_PASSWORD || 'proctoring'}@localhost:${postgresPort}/${process.env.POSTGRES_DB || 'proctoring'}`;
-const redisUrl = process.env.REDIS_URL || `redis://localhost:${redisPort}`;
-const minioEndpoint = process.env.MINIO_ENDPOINT || `http://localhost:${minioApiPort}/minio/health/live`;
+const mysqlConfig = {
+  host: process.env.MYSQL_HOST || '127.0.0.1',
+  port: Number.parseInt(process.env.MYSQL_PORT || '3306', 10),
+  user: process.env.MYSQL_USER || 'proctoring',
+  password: process.env.MYSQL_PASSWORD || '',
+  database: process.env.MYSQL_DATABASE || 'proctoring',
+  connectTimeout: 3000
+};
 
-async function checkPostgres() {
-  const { Client } = await import('pg');
-  const client = new Client({
-    connectionString: databaseUrl,
-    connectionTimeoutMillis: 3000
-  });
+async function checkMySql() {
+  const mysql = await import('mysql2/promise');
+  const connection = await mysql.createConnection(mysqlConfig);
 
   try {
-    await client.connect();
-    await client.query('SELECT 1');
+    await connection.query('SELECT 1');
   } finally {
-    await client.end().catch(() => {});
-  }
-}
-
-async function checkRedis() {
-  const { createClient } = await import('redis');
-  const client = createClient({
-    url: redisUrl,
-    socket: {
-      connectTimeout: 3000,
-      reconnectStrategy: false
-    }
-  });
-  client.on('error', () => {});
-
-  try {
-    await client.connect();
-    await client.ping();
-  } finally {
-    await client.quit().catch(() => {});
-  }
-}
-
-async function checkMinio() {
-  const response = await fetch(minioEndpoint, { signal: AbortSignal.timeout(3000) });
-
-  if (!response.ok) {
-    throw new Error(`received HTTP ${response.status}`);
+    await connection.end().catch(() => {});
   }
 }
 
@@ -63,4 +30,4 @@ if (failedDependencies.length > 0) {
   process.exit(1);
 }
 
-console.log('Infrastructure dependencies are available: PostgreSQL, Redis, MinIO');
+console.log('Infrastructure dependency is available: MySQL');

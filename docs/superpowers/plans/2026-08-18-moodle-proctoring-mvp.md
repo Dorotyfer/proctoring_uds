@@ -28,33 +28,32 @@
 
 ```text
 apps/
-  api/                         Fastify API and BullMQ worker
+  api/                         Fastify API and local MySQL worker
   admin/                       Next.js student flow and reports panel
   moodle/local/proctoring/     Moodle 4.3.3 configuration and integration plugin
 packages/contracts/            Zod request and response schemas
-infra/docker-compose.yml       PostgreSQL, Redis and MinIO
 scripts/check-infra.mjs        Local dependency health check
 docs/runbooks/                 Installation and acceptance guides
 ```
 
-> **Environment revision (approved 2026-08-18):** Task 1's Docker Compose, PostgreSQL, Redis and MinIO requirements are replaced by a MySQL connection configured in `.env`, a `scripts/check-infra.mjs` MySQL-only check, and a writable `EVIDENCE_STORAGE_PATH` outside Apache's document root. Tasks 3, 6 and 7 use MySQL; Task 6 claims jobs atomically from a MySQL `proctoring_jobs` table; Task 7 uses the encrypted local evidence path. Do not add Docker, Redis, BullMQ, PostgreSQL, MinIO or S3 dependencies.
+> **Environment revision (approved 2026-08-18):** The MVP uses only a MySQL connection configured in `.env`, a `scripts/check-infra.mjs` MySQL-only check, and a writable `EVIDENCE_STORAGE_PATH` outside Apache's document root. Tasks 3, 6 and 7 use MySQL; Task 6 claims jobs atomically from a MySQL `proctoring_jobs` table; Task 7 uses the encrypted local evidence path. Do not add external infrastructure dependencies.
 
 ### Task 1: Create the reproducible development environment
 
 **Files:**
 - Create: `package.json`, `pnpm-workspace.yaml`, `.env.example`
-- Create: `infra/docker-compose.yml`, `scripts/check-infra.mjs`
+- Create: `scripts/check-infra.mjs`
 - Create: `docs/runbooks/local-development.md`
 - Test: `scripts/check-infra.mjs`
 
-**Interfaces:** Produces PostgreSQL on port 5432, Redis on port 6379 and MinIO on ports 9000/9001 for all local services.
+**Interfaces:** Validates the MySQL instance configured in `.env` and the evidence path managed outside Apache's document root.
 
 - [ ] **Step 1: Write a failing dependency check**
 
-Create `scripts/check-infra.mjs` with `pg`, `redis` and `fetch` checks. It must reject when PostgreSQL, Redis or MinIO are unavailable.
+Create `scripts/check-infra.mjs` with a `mysql2` connectivity check. It must reject when the MySQL connection from `.env` is unavailable.
 
 ```js
-const results = await Promise.allSettled([checkPostgres(), checkRedis(), checkMinio()]);
+const results = await Promise.allSettled([checkMySql()]);
 if (results.some((result) => result.status === 'rejected')) process.exit(1);
 ```
 
@@ -65,24 +64,16 @@ Expected: exit code `1` with unavailable dependency names.
 
 - [ ] **Step 3: Add workspace and Compose services**
 
-Create a private pnpm workspace. Define `postgres:16`, `redis:7-alpine` and `minio/minio`, named volumes, health checks and environment variables from `.env`. Add `infra:up`, `infra:down` and `infra:check` scripts.
-
-```yaml
-healthcheck:
-  test: ["CMD-SHELL", "pg_isready -U proctoring -d proctoring"]
-  interval: 5s
-  timeout: 3s
-  retries: 10
-```
+Create a private pnpm workspace. Add `mysql2`, document `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` and `EVIDENCE_STORAGE_PATH`, and add the `infra:check` script. The evidence path must be outside Apache's document root and readable only by the API/worker service account.
 
 - [ ] **Step 4: Verify the environment**
 
-Run: `pnpm infra:up` then `pnpm infra:check`
-Expected: all three checks pass.
+Run: `pnpm infra:check`
+Expected: the MySQL check passes.
 
 - [ ] **Step 5: Document and commit**
 
-Document prerequisites, setup, logs and cleanup. Run `git add package.json pnpm-workspace.yaml infra scripts .env.example docs/runbooks/local-development.md` and commit `chore: add local proctoring environment`.
+Document prerequisites, setup, logs, cleanup and Apache-safe evidence storage. Run `git add package.json pnpm-workspace.yaml scripts .env.example docs/runbooks/local-development.md` and commit `chore: add local proctoring environment`.
 
 ### Task 2: Define shared contracts and security boundaries
 
@@ -240,7 +231,7 @@ Expected: fail because event routes do not exist.
 
 - [ ] **Step 3: Implement event buffering and worker rules**
 
-Buffer browser events in IndexedDB while offline and flush in chronological order when online. Use Redis/BullMQ to classify events. Create alerts for repeated face absence, multiple faces, camera interruption, liveness failure and page visibility change. Store an alert status of `open`, `reviewed` or `dismissed`; never call a Moodle grading endpoint.
+Buffer browser events in IndexedDB while offline and flush in chronological order when online. Queue classification jobs in MySQL and let the local worker claim them atomically. Create alerts for repeated face absence, multiple faces, camera interruption, liveness failure and page visibility change. Store an alert status of `open`, `reviewed` or `dismissed`; never call a Moodle grading endpoint.
 
 - [ ] **Step 4: Verify and commit**
 
@@ -267,7 +258,7 @@ Expected: fail because evidence services do not exist.
 
 - [ ] **Step 3: Implement encryption and retention metadata**
 
-Encrypt each object with AES-256-GCM using an envelope data key and store only object key, key reference, IV, auth tag, content type, capture reason and expiry metadata in PostgreSQL. Reject non-JPEG inputs and files larger than 2 MB. Put reference, periodic and alert captures in separate object prefixes.
+Encrypt each object with AES-256-GCM using an envelope data key and store only object key, key reference, IV, auth tag, content type, capture reason and expiry metadata in MySQL. Write encrypted files under `EVIDENCE_STORAGE_PATH` outside Apache. Reject non-JPEG inputs and files larger than 2 MB. Put reference, periodic and alert captures in separate local prefixes.
 
 - [ ] **Step 4: Verify and commit**
 
