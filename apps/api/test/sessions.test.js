@@ -108,6 +108,22 @@ test('rejects a session request without the Moodle integration key', async (t) =
   assert.deepEqual(response.json(), { error: 'Unauthorized' });
 });
 
+test('rejects a session request when the server integration key is missing', async (t) => {
+  const repository = createRepository();
+  const app = createApp({ repository, tokenSecret, now: () => now });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/internal/sessions',
+    payload: createSessionPayload()
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(repository.sessions.length, 0);
+  assert.deepEqual(response.json(), { error: 'Unauthorized' });
+});
+
 test('rejects a browser token after its fifteen-minute expiration', () => {
   const { app } = buildApp();
 

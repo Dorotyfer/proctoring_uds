@@ -3,11 +3,20 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { CreateSessionInput } from '@proctoring/contracts';
 
 function isAuthorized(providedKey, integrationKey) {
+  if (
+    typeof providedKey !== 'string' ||
+    providedKey.length === 0 ||
+    typeof integrationKey !== 'string' ||
+    integrationKey.length === 0
+  ) {
+    return false;
+  }
+
   const providedDigest = createHash('sha256')
-    .update(String(providedKey ?? ''))
+    .update(providedKey)
     .digest();
   const expectedDigest = createHash('sha256')
-    .update(String(integrationKey ?? ''))
+    .update(integrationKey)
     .digest();
 
   return timingSafeEqual(providedDigest, expectedDigest);
