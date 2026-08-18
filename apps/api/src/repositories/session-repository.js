@@ -57,34 +57,38 @@ export class SessionRepository {
     return rows[0] ?? null;
   }
 
-  async setStatus(id, status) {
-    await this.database.execute('UPDATE proctoring_sessions SET status = ? WHERE id = ?', [status, id]);
-  }
-
-  async consumeLivenessChallenge({ sessionId, challengeId, completedAt }) {
+  async markPreparationReady({ sessionId, challengeId, completedAt }) {
     const [result] = await this.database.execute(
       `UPDATE proctoring_sessions
-       SET liveness_challenge_completed_at = ?
+       SET status = 'ready', liveness_challenge_completed_at = ?
        WHERE id = ?
          AND liveness_challenge_id = ?
-         AND liveness_challenge_completed_at IS NULL`,
+         AND liveness_challenge_completed_at IS NULL
+         AND status = 'created'`,
       [completedAt, sessionId, challengeId]
     );
     return result.affectedRows === 1;
   }
 
   async savePreparation(submission) {
-    await this.database.execute(
-      `INSERT INTO proctoring_preparation_submissions (session_id, evidence_json, submitted_at)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE evidence_json = VALUES(evidence_json), submitted_at = VALUES(submitted_at)`,
-      [submission.sessionId, JSON.stringify(submission.evidence), submission.submittedAt]
-    );
+    try {
+      const [result] = await this.database.execute(
+        `INSERT INTO proctoring_preparation_submissions (session_id, submission_id, evidence_json, submitted_at)
+         VALUES (?, ?, ?, ?)`,
+        [submission.sessionId, submission.id, JSON.stringify(submission.evidence), submission.submittedAt]
+      );
+      return result.affectedRows === 1;
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return false;
+      }
+      throw error;
+    }
   }
 
   async findPreparation(sessionId) {
     const [rows] = await this.database.execute(
-      `SELECT session_id AS sessionId, evidence_json AS evidenceJson, submitted_at AS submittedAt
+      `SELECT session_id AS sessionId, submission_id AS id, evidence_json AS evidenceJson, submitted_at AS submittedAt
        FROM proctoring_preparation_submissions WHERE session_id = ?`,
       [sessionId]
     );
@@ -93,8 +97,53 @@ export class SessionRepository {
     }
     return {
       sessionId: rows[0].sessionId,
+      id: rows[0].id,
       evidence: JSON.parse(rows[0].evidenceJson),
       submittedAt: rows[0].submittedAt
+    };
+  }
+
+  async saveTrustedPreparation(verification) {
+    try {
+      const [result] = await this.database.execute(
+        `INSERT INTO proctoring_preparation_verifications (
+          session_id, submission_id, verification_json, verified_at
+        ) VALUES (?, ?, ?, ?)`,
+        [
+          verification.sessionId,
+          verification.submissionId,
+          JSON.stringify({
+            referenceCaptureId: verification.referenceCaptureId,
+            identityVerified: verification.identityVerified,
+            liveness: verification.liveness
+          }),
+          verification.verifiedAt
+        ]
+      );
+      return result.affectedRows === 1;
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async findTrustedPreparation(sessionId) {
+    const [rows] = await this.database.execute(
+      `SELECT session_id AS sessionId, submission_id AS submissionId,
+        verification_json AS verificationJson, verified_at AS verifiedAt
+       FROM proctoring_preparation_verifications WHERE session_id = ?`,
+      [sessionId]
+    );
+    if (!rows[0]) {
+      return null;
+    }
+    return {
+      sessionId: rows[0].sessionId,
+      submissionId: rows[0].submissionId,
+      ...JSON.parse(rows[0].verificationJson),
+      verifiedAt: rows[0].verifiedAt
     };
   }
 }

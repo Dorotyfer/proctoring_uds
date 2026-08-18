@@ -2,6 +2,9 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { CreateSessionInput } from '@proctoring/contracts';
 
+import { PreparationInputError } from '../services/preparation-input.js';
+import { PreparationConflictError } from '../services/session-service.js';
+
 function isAuthorized(providedKey, integrationKey) {
   if (
     typeof providedKey !== 'string' ||
@@ -49,14 +52,35 @@ export function registerSessionRoutes(app, {
     const token = typeof authorization === 'string' && authorization.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
       : null;
-    if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) {
-      return reply.code(400).send({ error: 'Invalid preparation submission' });
-    }
     try {
       const result = await sessionService.submitPreparation(request.params.sessionId, token, request.body);
       return reply.code(202).send(result);
-    } catch {
+    } catch (error) {
+      if (error instanceof PreparationInputError) {
+        return reply.code(400).send({ error: 'Invalid preparation submission' });
+      }
+      if (error instanceof PreparationConflictError) {
+        return reply.code(409).send({ error: error.message });
+      }
       return reply.code(401).send({ error: 'Unauthorized' });
+    }
+  });
+
+  app.post('/v1/internal/sessions/:sessionId/preparation-verification', async (request, reply) => {
+    if (!isAuthorized(request.headers['x-proctoring-worker-key'], preparationWorkerKey)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    try {
+      const result = await sessionService.recordTrustedPreparation(request.params.sessionId, request.body);
+      return reply.code(201).send(result);
+    } catch (error) {
+      if (error instanceof PreparationInputError) {
+        return reply.code(400).send({ error: 'Invalid preparation verification' });
+      }
+      if (error instanceof PreparationConflictError) {
+        return reply.code(409).send({ error: error.message });
+      }
+      throw error;
     }
   });
 

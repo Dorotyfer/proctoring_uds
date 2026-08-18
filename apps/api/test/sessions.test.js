@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createApp } from '../src/app.js';
+import { ApiConfigurationError } from '../src/config.js';
 import { verifyBrowserToken } from '../src/services/token-service.js';
 
 const integrationKey = 'test-integration-key';
+const preparationWorkerKey = 'test-worker-integration-key';
 const tokenSecret = 'test-token-secret-that-is-long-enough';
 const now = new Date('2026-08-18T12:00:00.000Z');
 
@@ -35,7 +37,15 @@ function createRepository() {
 
 function buildApp(repository = createRepository()) {
   return {
-    app: createApp({ integrationKey, repository, tokenSecret, now: () => now }),
+    app: createApp({
+      environment: {
+        MOODLE_INTEGRATION_KEY: integrationKey,
+        WORKER_INTEGRATION_KEY: preparationWorkerKey
+      },
+      repository,
+      tokenSecret,
+      now: () => now
+    }),
     repository
   };
 }
@@ -116,20 +126,11 @@ test('rejects a session request without the Moodle integration key', async (t) =
   assert.deepEqual(response.json(), { error: 'Unauthorized' });
 });
 
-test('rejects a session request when the server integration key is missing', async (t) => {
-  const repository = createRepository();
-  const app = createApp({ repository, tokenSecret, now: () => now });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'POST',
-    url: '/v1/internal/sessions',
-    payload: createSessionPayload()
-  });
-
-  assert.equal(response.statusCode, 401);
-  assert.equal(repository.sessions.length, 0);
-  assert.deepEqual(response.json(), { error: 'Unauthorized' });
+test('rejects app construction when the server integration key is missing', () => {
+  assert.throws(
+    () => createApp({ repository: createRepository(), tokenSecret, now: () => now, environment: {} }),
+    ApiConfigurationError
+  );
 });
 
 test('rejects a browser token after its fifteen-minute expiration', () => {

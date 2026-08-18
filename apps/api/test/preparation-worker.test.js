@@ -3,14 +3,21 @@ import test from 'node:test';
 
 import { createApp } from '../src/app.js';
 
-const integrationKey = 'moodle-integration-key';
-const preparationWorkerKey = 'worker-integration-key';
+const environment = {
+  MOODLE_INTEGRATION_KEY: 'moodle-integration-key',
+  WORKER_INTEGRATION_KEY: 'worker-integration-key'
+};
+const integrationKey = environment.MOODLE_INTEGRATION_KEY;
+const preparationWorkerKey = environment.WORKER_INTEGRATION_KEY;
 const tokenSecret = 'test-token-secret-that-is-long-enough';
 const now = new Date('2026-08-18T12:00:00.000Z');
+const referenceCaptureId = 'c7c2d6c9-36ab-4a3f-afde-1f6e6e0f4811';
+const livenessCaptureId = '42d9b1ea-81d2-4de6-a725-dced4bc431f0';
 
 function createRepository() {
   const sessions = new Map();
   const preparations = new Map();
+  const trustedPreparations = new Map();
 
   return {
     sessions,
@@ -22,21 +29,41 @@ function createRepository() {
       return sessions.get(id) ?? null;
     },
     async savePreparation(submission) {
+      if (preparations.has(submission.sessionId)) {
+        return false;
+      }
       preparations.set(submission.sessionId, submission);
+      return true;
     },
     async findPreparation(sessionId) {
       return preparations.get(sessionId) ?? null;
     },
-    async consumeLivenessChallenge({ sessionId, challengeId, completedAt }) {
-      const session = sessions.get(sessionId);
-      if (!session || session.livenessChallengeId !== challengeId || session.livenessChallengeCompletedAt) {
+    async saveTrustedPreparation(verification) {
+      if (trustedPreparations.has(verification.sessionId)) {
         return false;
       }
-      sessions.set(sessionId, { ...session, livenessChallengeCompletedAt: completedAt });
+      trustedPreparations.set(verification.sessionId, verification);
       return true;
     },
-    async setStatus(id, status) {
-      sessions.set(id, { ...sessions.get(id), status });
+    async findTrustedPreparation(sessionId) {
+      return trustedPreparations.get(sessionId) ?? null;
+    },
+    async markPreparationReady({ sessionId, challengeId, completedAt }) {
+      const session = sessions.get(sessionId);
+      if (
+        !session ||
+        session.status !== 'created' ||
+        session.livenessChallengeId !== challengeId ||
+        session.livenessChallengeCompletedAt
+      ) {
+        return false;
+      }
+      sessions.set(sessionId, {
+        ...session,
+        status: 'ready',
+        livenessChallengeCompletedAt: completedAt
+      });
+      return true;
     }
   };
 }
@@ -65,15 +92,24 @@ async function createSession(app, payload = sessionPayload()) {
   return response.json();
 }
 
-function validEvidence(livenessChallengeId) {
+function browserEvidence(livenessChallengeId) {
   return {
-    cameraPermissionGranted: true,
-    faceCount: 1,
-    faceInFrame: true,
-    referenceCaptureId: 'reference-capture-1',
+    referenceCaptureId,
+    liveness: {
+      challengeId: livenessChallengeId,
+      captureId: livenessCaptureId
+    }
+  };
+}
+
+function workerVerification(submissionId, livenessChallengeId) {
+  return {
+    submissionId,
+    referenceCaptureId,
     identityVerified: true,
     liveness: {
       challengeId: livenessChallengeId,
+      captureId: livenessCaptureId,
       completed: true,
       passed: true
     }
@@ -82,92 +118,165 @@ function validEvidence(livenessChallengeId) {
 
 function buildApp(repository = createRepository()) {
   return {
-    app: createApp({
-      integrationKey,
-      preparationWorkerKey,
-      repository,
-      tokenSecret,
-      now: () => now
-    }),
+    app: createApp({ environment, repository, tokenSecret, now: () => now }),
     repository
   };
 }
 
-test('worker validates a complete preparation submission before marking the session ready', async (t) => {
-  const { app, repository } = buildApp();
-  t.after(() => app.close());
-  const created = await createSession(app);
-
-  const submitted = await app.inject({
+async function submitBrowserEvidence(app, created) {
+  const response = await app.inject({
     method: 'POST',
     url: `/v1/sessions/${created.session.id}/preparation`,
     headers: { authorization: `Bearer ${created.browserToken}` },
-    payload: validEvidence(created.preparation.livenessChallengeId)
+    payload: browserEvidence(created.preparation.livenessChallengeId)
   });
-  assert.equal(submitted.statusCode, 202);
+  assert.equal(response.statusCode, 202);
+  return response.json();
+}
 
-  const verified = await app.inject({
+async function recordTrustedVerification(app, created, submission) {
+  const response = await app.inject({
     method: 'POST',
-    url: `/v1/internal/sessions/${created.session.id}/verify-preparation`,
+    url: `/v1/internal/sessions/${created.session.id}/preparation-verification`,
+    headers: { 'x-proctoring-worker-key': preparationWorkerKey },
+    payload: workerVerification(submission.submissionId, created.preparation.livenessChallengeId)
+  });
+  assert.equal(response.statusCode, 201);
+}
+
+async function verifyPreparation(app, sessionId) {
+  return app.inject({
+    method: 'POST',
+    url: `/v1/internal/sessions/${sessionId}/verify-preparation`,
     headers: { 'x-proctoring-worker-key': preparationWorkerKey }
   });
-  assert.equal(verified.statusCode, 200);
-  assert.deepEqual(verified.json(), { ready: true });
+}
 
+test('forged browser all-true JSON is rejected and cannot make a session ready', async (t) => {
+  const { app, repository } = buildApp();
+  t.after(() => app.close());
+  const created = await createSession(app);
+  const forged = {
+    ...browserEvidence(created.preparation.livenessChallengeId),
+    cameraPermissionGranted: true,
+    faceCount: 1,
+    faceInFrame: true,
+    identityVerified: true,
+    liveness: {
+      ...browserEvidence(created.preparation.livenessChallengeId).liveness,
+      completed: true,
+      passed: true
+    }
+  };
+
+  const submission = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${created.session.id}/preparation`,
+    headers: { authorization: `Bearer ${created.browserToken}` },
+    payload: forged
+  });
+  assert.equal(submission.statusCode, 400);
+
+  const verification = await verifyPreparation(app, created.session.id);
+  assert.equal(verification.statusCode, 409);
+  assert.equal(repository.sessions.get(created.session.id).status, 'created');
+});
+
+test('worker marks a session ready only from a trusted verification bound to immutable browser evidence', async (t) => {
+  const { app, repository } = buildApp();
+  t.after(() => app.close());
+  const created = await createSession(app);
+  const submission = await submitBrowserEvidence(app, created);
+
+  let verification = await verifyPreparation(app, created.session.id);
+  assert.equal(verification.statusCode, 409);
+  assert.deepEqual(verification.json(), {
+    ready: false,
+    errors: ['trusted preparation verification was not found']
+  });
+
+  await recordTrustedVerification(app, created, submission);
+  verification = await verifyPreparation(app, created.session.id);
+  assert.equal(verification.statusCode, 200);
+  assert.deepEqual(verification.json(), { ready: true });
   assert.equal(repository.sessions.get(created.session.id).status, 'ready');
   assert.equal(repository.sessions.get(created.session.id).livenessChallengeCompletedAt, now.toISOString());
 });
 
-test('worker rejects incomplete preparation evidence without consuming its liveness challenge', async (t) => {
-  const { app, repository } = buildApp();
+test('preparation input rejects unknown fields and cannot be replaced after verification', async (t) => {
+  const { app } = buildApp();
   t.after(() => app.close());
   const created = await createSession(app);
-  const evidence = validEvidence(created.preparation.livenessChallengeId);
-  evidence.identityVerified = false;
 
-  await app.inject({
+  const malformed = await app.inject({
     method: 'POST',
     url: `/v1/sessions/${created.session.id}/preparation`,
     headers: { authorization: `Bearer ${created.browserToken}` },
-    payload: evidence
+    payload: {
+      ...browserEvidence(created.preparation.livenessChallengeId),
+      ignored: 'x'.repeat(128 * 1024)
+    }
   });
-  const verified = await app.inject({
+  assert.equal(malformed.statusCode, 400);
+
+  const invalidCapture = await app.inject({
     method: 'POST',
-    url: `/v1/internal/sessions/${created.session.id}/verify-preparation`,
-    headers: { 'x-proctoring-worker-key': preparationWorkerKey }
+    url: `/v1/sessions/${created.session.id}/preparation`,
+    headers: { authorization: `Bearer ${created.browserToken}` },
+    payload: {
+      ...browserEvidence(created.preparation.livenessChallengeId),
+      referenceCaptureId: 'not-a-uuid'
+    }
+  });
+  assert.equal(invalidCapture.statusCode, 400);
+
+  const submission = await submitBrowserEvidence(app, created);
+  await recordTrustedVerification(app, created, submission);
+  const verification = await verifyPreparation(app, created.session.id);
+  assert.equal(verification.statusCode, 200);
+
+  const replaced = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${created.session.id}/preparation`,
+    headers: { authorization: `Bearer ${created.browserToken}` },
+    payload: browserEvidence(created.preparation.livenessChallengeId)
+  });
+  assert.equal(replaced.statusCode, 409);
+});
+
+test('only one concurrent worker verification can transition a created session', async (t) => {
+  const { app, repository } = buildApp();
+  t.after(() => app.close());
+  const created = await createSession(app);
+  const submission = await submitBrowserEvidence(app, created);
+  await recordTrustedVerification(app, created, submission);
+
+  const results = await Promise.all([
+    verifyPreparation(app, created.session.id),
+    verifyPreparation(app, created.session.id)
+  ]);
+  assert.deepEqual(results.map((response) => response.statusCode).sort(), [200, 409]);
+  assert.equal(repository.sessions.get(created.session.id).status, 'ready');
+});
+
+test('a competing terminal lifecycle status blocks readiness without consuming the challenge', async (t) => {
+  const { app, repository } = buildApp();
+  t.after(() => app.close());
+  const created = await createSession(app);
+  const submission = await submitBrowserEvidence(app, created);
+  await recordTrustedVerification(app, created, submission);
+  repository.sessions.set(created.session.id, {
+    ...repository.sessions.get(created.session.id),
+    status: 'expired'
   });
 
-  assert.equal(verified.statusCode, 409);
-  assert.deepEqual(verified.json(), { ready: false, errors: ['identityVerified must be true'] });
-  assert.equal(repository.sessions.get(created.session.id).status, 'created');
+  const verification = await verifyPreparation(app, created.session.id);
+  assert.equal(verification.statusCode, 409);
+  assert.equal(repository.sessions.get(created.session.id).status, 'expired');
   assert.equal(repository.sessions.get(created.session.id).livenessChallengeCompletedAt, undefined);
 });
 
-test('worker refuses a liveness challenge issued for another session', async (t) => {
-  const { app, repository } = buildApp();
-  t.after(() => app.close());
-  const first = await createSession(app, sessionPayload({ moodleAttemptId: 'attempt-1' }));
-  const second = await createSession(app, sessionPayload({ moodleAttemptId: 'attempt-2' }));
-
-  await app.inject({
-    method: 'POST',
-    url: `/v1/sessions/${second.session.id}/preparation`,
-    headers: { authorization: `Bearer ${second.browserToken}` },
-    payload: validEvidence(first.preparation.livenessChallengeId)
-  });
-  const verified = await app.inject({
-    method: 'POST',
-    url: `/v1/internal/sessions/${second.session.id}/verify-preparation`,
-    headers: { 'x-proctoring-worker-key': preparationWorkerKey }
-  });
-
-  assert.equal(verified.statusCode, 409);
-  assert.deepEqual(verified.json(), { ready: false, errors: ['liveness challenge does not match this session'] });
-  assert.equal(repository.sessions.get(second.session.id).status, 'created');
-  assert.equal(repository.sessions.get(second.session.id).livenessChallengeCompletedAt, undefined);
-});
-
-test('Moodle and browser credentials cannot activate a submitted session', async (t) => {
+test('Moodle and browser credentials cannot activate or record a trusted verification', async (t) => {
   const { app } = buildApp();
   t.after(() => app.close());
   const created = await createSession(app);
@@ -181,8 +290,9 @@ test('Moodle and browser credentials cannot activate a submitted session', async
 
   const browserAttempt = await app.inject({
     method: 'POST',
-    url: `/v1/internal/sessions/${created.session.id}/verify-preparation`,
-    headers: { authorization: `Bearer ${created.browserToken}` }
+    url: `/v1/internal/sessions/${created.session.id}/preparation-verification`,
+    headers: { authorization: `Bearer ${created.browserToken}` },
+    payload: {}
   });
   assert.equal(browserAttempt.statusCode, 401);
 });

@@ -5,7 +5,10 @@ import { createApp } from '../src/app.js';
 
 test('accepts the UTC Z timestamps emitted by Moodle session_manager', async (t) => {
   const app = createApp({
-    integrationKey: 'moodle-key',
+    environment: {
+      MOODLE_INTEGRATION_KEY: 'moodle-key',
+      WORKER_INTEGRATION_KEY: 'worker-key'
+    },
     tokenSecret: 'a-token-secret-that-is-long-enough',
     now: () => new Date('2026-08-18T12:00:00.000Z'),
     repository: { create: async (session) => session }

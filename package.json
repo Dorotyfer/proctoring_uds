@@ -9,7 +9,7 @@
   "scripts": {
     "infra:check": "node --env-file=.env scripts/check-infra.mjs",
     "db:migrate:sessions": "node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/001_sessions.sql",
-    "db:migrate:preparation": "node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/002_preparation_submissions.sql && node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/003_preparation_liveness.sql",
+    "db:migrate:preparation": "node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/002_preparation_submissions.sql && node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/003_preparation_liveness.sql && node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/004_preparation_verifications.sql",
     "test:infra": "node --test scripts/check-infra.test.mjs scripts/mysql-config.test.mjs scripts/apply-migration.test.mjs",
     "test": "pnpm --filter @proctoring/contracts test && pnpm --filter @proctoring/api test && pnpm test:infra"
   },
