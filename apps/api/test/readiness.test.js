@@ -22,6 +22,14 @@ function repository() {
     async setStatus(id, status) {
       items.set(id, { ...items.get(id), status });
     },
+    async consumeLivenessChallenge({ sessionId, challengeId, completedAt }) {
+      const session = items.get(sessionId);
+      if (!session || session.livenessChallengeId !== challengeId || session.livenessChallengeCompletedAt) {
+        return false;
+      }
+      items.set(sessionId, { ...session, livenessChallengeCompletedAt: completedAt });
+      return true;
+    },
     async savePreparation(submission) {
       preparations.set(submission.sessionId, submission);
     },
@@ -35,7 +43,6 @@ test('only server-side preparation verification can make a session ready', async
   const app = createApp({
     integrationKey,
     preparationWorkerKey,
-    preparationVerifier: async (submission) => submission.evidence.challengeResponse === 'verified-by-server',
     tokenSecret,
     repository: repository(),
     now: () => now
@@ -69,7 +76,18 @@ test('only server-side preparation verification can make a session ready', async
     method: 'POST',
     url: `/v1/sessions/${created.session.id}/preparation`,
     headers: { authorization: `Bearer ${created.browserToken}` },
-    payload: { challengeResponse: 'verified-by-server' }
+    payload: {
+      cameraPermissionGranted: true,
+      faceCount: 1,
+      faceInFrame: true,
+      referenceCaptureId: 'reference-capture-1',
+      identityVerified: true,
+      liveness: {
+        challengeId: created.preparation.livenessChallengeId,
+        completed: true,
+        passed: true
+      }
+    }
   });
   assert.equal(response.statusCode, 202);
   assert.deepEqual(response.json(), { status: 'submitted' });

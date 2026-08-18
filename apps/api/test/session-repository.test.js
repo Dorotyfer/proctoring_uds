@@ -21,14 +21,15 @@ test('persists a session using MySQL placeholders and returns its API shape', as
     status: 'created',
     issuedAt: '2026-08-18T12:00:00.000Z',
     expiresAt: '2026-08-18T13:00:00.000Z',
-    createdAt: '2026-08-18T12:00:00.000Z'
+    createdAt: '2026-08-18T12:00:00.000Z',
+    livenessChallengeId: 'd6396c8c-aa0f-4d14-bf97-c2d2d99e6b95'
   };
 
   const persisted = await new SessionRepository(database).create(session);
 
   assert.deepEqual(persisted, session);
   assert.equal(calls.length, 1);
-  assert.match(calls[0].sql, /VALUES \(\?, \?, \?, \?, \?, \?, \?, \?, \?, \?\)/);
+  assert.match(calls[0].sql, /VALUES \(\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?\)/);
   assert.doesNotMatch(calls[0].sql, /RETURNING/);
   assert.deepEqual(calls[0].values, [
     session.id,
@@ -40,6 +41,7 @@ test('persists a session using MySQL placeholders and returns its API shape', as
     session.status,
     session.issuedAt,
     session.expiresAt,
-    session.createdAt
+    session.createdAt,
+    session.livenessChallengeId
   ]);
 });

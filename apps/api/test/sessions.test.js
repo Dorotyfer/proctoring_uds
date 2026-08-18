@@ -66,7 +66,15 @@ test('creates and persists a signed browser session for an authorized Moodle req
     expiresAt: '2026-08-18T13:00:00.000Z',
     createdAt: '2026-08-18T12:00:00.000Z'
   });
-  assert.deepEqual(repository.sessions, [body.session]);
+  assert.equal(repository.sessions.length, 1);
+  assert.match(repository.sessions[0].livenessChallengeId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(
+    { ...repository.sessions[0], livenessChallengeId: undefined },
+    { ...body.session, livenessChallengeId: undefined }
+  );
+  assert.deepEqual(body.preparation, {
+    livenessChallengeId: repository.sessions[0].livenessChallengeId
+  });
 
   const claims = verifyBrowserToken(body.browserToken, tokenSecret, { now });
   assert.deepEqual(claims, {

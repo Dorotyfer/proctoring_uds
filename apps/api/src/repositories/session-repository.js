@@ -15,8 +15,9 @@ export class SessionRepository {
         status,
         issued_at,
         expires_at,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        created_at,
+        liveness_challenge_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
         session.moodleUserId,
@@ -27,7 +28,8 @@ export class SessionRepository {
         session.status,
         session.issuedAt,
         session.expiresAt,
-        session.createdAt
+        session.createdAt,
+        session.livenessChallengeId
       ]
     );
 
@@ -46,7 +48,9 @@ export class SessionRepository {
         status AS status,
         issued_at AS issuedAt,
         expires_at AS expiresAt,
-        created_at AS createdAt
+        created_at AS createdAt,
+        liveness_challenge_id AS livenessChallengeId,
+        liveness_challenge_completed_at AS livenessChallengeCompletedAt
       FROM proctoring_sessions WHERE id = ?`,
       [id]
     );
@@ -55,6 +59,18 @@ export class SessionRepository {
 
   async setStatus(id, status) {
     await this.database.execute('UPDATE proctoring_sessions SET status = ? WHERE id = ?', [status, id]);
+  }
+
+  async consumeLivenessChallenge({ sessionId, challengeId, completedAt }) {
+    const [result] = await this.database.execute(
+      `UPDATE proctoring_sessions
+       SET liveness_challenge_completed_at = ?
+       WHERE id = ?
+         AND liveness_challenge_id = ?
+         AND liveness_challenge_completed_at IS NULL`,
+      [completedAt, sessionId, challengeId]
+    );
+    return result.affectedRows === 1;
   }
 
   async savePreparation(submission) {

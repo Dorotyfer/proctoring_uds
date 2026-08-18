@@ -5,6 +5,7 @@ export function createSessionService({ repository, tokenService, preparationVeri
     async create(input) {
       const session = {
         id: randomUUID(),
+        livenessChallengeId: randomUUID(),
         moodleUserId: input.moodleUserId,
         moodleCourseId: input.moodleCourseId,
         moodleQuizId: input.moodleQuizId,
@@ -16,10 +17,12 @@ export function createSessionService({ repository, tokenService, preparationVeri
         createdAt: now().toISOString()
       };
       const persistedSession = await repository.create(session);
+      const { livenessChallengeId, livenessChallengeCompletedAt, ...publicSession } = persistedSession;
 
       return {
-        session: persistedSession,
-        browserToken: tokenService.issueBrowserToken(persistedSession)
+        session: publicSession,
+        browserToken: tokenService.issueBrowserToken(persistedSession),
+        preparation: { livenessChallengeId }
       };
     },
     async submitPreparation(sessionId, browserToken, evidence) {
@@ -42,13 +45,27 @@ export function createSessionService({ repository, tokenService, preparationVeri
       const session = await repository.findById(sessionId);
       const submission = await repository.findPreparation(sessionId);
       if (!session || !submission || !preparationVerifier) {
-        return { ready: false };
+        return { ready: false, errors: ['preparation submission was not found'] };
       }
-      const verified = await preparationVerifier(submission, session);
-      if (!verified) {
-        return { ready: false };
+      if (session.status === 'ready') {
+        return { ready: true };
       }
-      await repository.setStatus(sessionId, 'active');
+
+      const result = await preparationVerifier.verify(submission, session);
+      if (!result.valid) {
+        return { ready: false, errors: result.errors };
+      }
+
+      const consumed = await repository.consumeLivenessChallenge({
+        sessionId,
+        challengeId: submission.evidence.liveness.challengeId,
+        completedAt: now().toISOString()
+      });
+      if (!consumed) {
+        return { ready: false, errors: ['liveness challenge was already completed'] };
+      }
+
+      await repository.setStatus(sessionId, 'ready');
       return { ready: true };
     },
     async getReadiness(sessionId) {
@@ -56,7 +73,7 @@ export function createSessionService({ repository, tokenService, preparationVeri
       if (!session) {
         return null;
       }
-      return { ready: session.status === 'active' };
+      return { ready: session.status === 'ready' };
     }
   };
 }

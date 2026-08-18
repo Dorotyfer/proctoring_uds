@@ -22,7 +22,12 @@ function isAuthorized(providedKey, integrationKey) {
   return timingSafeEqual(providedDigest, expectedDigest);
 }
 
-export function registerSessionRoutes(app, { integrationKey, preparationWorkerKey, sessionService }) {
+export function registerSessionRoutes(app, {
+  integrationKey,
+  preparationWorkerKey,
+  preparationWorker,
+  sessionService
+}) {
   app.post('/v1/internal/sessions', async (request, reply) => {
     if (!isAuthorized(request.headers['x-moodle-integration-key'], integrationKey)) {
       return reply.code(401).send({ error: 'Unauthorized' });
@@ -59,7 +64,7 @@ export function registerSessionRoutes(app, { integrationKey, preparationWorkerKe
     if (!isAuthorized(request.headers['x-proctoring-worker-key'], preparationWorkerKey)) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
-    const result = await sessionService.verifyPreparation(request.params.sessionId);
+    const result = await preparationWorker.verify(request.params.sessionId);
     return reply.code(result.ready ? 200 : 409).send(result);
   });
 
