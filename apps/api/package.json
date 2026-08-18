@@ -1,13 +1,13 @@
 {
-  "name": "@proctoring/contracts",
+  "name": "@proctoring/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.js",
   "scripts": {
     "test": "node --test"
   },
   "dependencies": {
-    "zod": "^4.1.12"
+    "@proctoring/contracts": "workspace:*",
+    "fastify": "^5.5.0"
   }
 }
