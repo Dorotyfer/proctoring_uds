@@ -38,4 +38,28 @@ export function registerSessionRoutes(app, { integrationKey, sessionService }) {
 
     return reply.code(201).send(result);
   });
+
+  app.post('/v1/sessions/:sessionId/ready', async (request, reply) => {
+    const authorization = request.headers.authorization;
+    const token = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : null;
+    try {
+      const result = await sessionService.markReady(request.params.sessionId, token);
+      return reply.code(200).send(result);
+    } catch {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+  });
+
+  app.get('/v1/internal/sessions/:sessionId/readiness', async (request, reply) => {
+    if (!isAuthorized(request.headers['x-moodle-integration-key'], integrationKey)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const readiness = await sessionService.getReadiness(request.params.sessionId);
+    if (!readiness) {
+      return reply.code(404).send({ error: 'Not found' });
+    }
+    return reply.code(200).send(readiness);
+  });
 }

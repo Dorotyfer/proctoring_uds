@@ -21,6 +21,25 @@ export function createSessionService({ repository, tokenService, now = () => new
         session: persistedSession,
         browserToken: tokenService.issueBrowserToken(persistedSession)
       };
+    },
+    async markReady(sessionId, browserToken) {
+      const claims = tokenService.verifyBrowserToken(browserToken);
+      if (claims.sessionId !== sessionId) {
+        throw new Error('Browser token is not valid for this session');
+      }
+      const session = await repository.findById(sessionId);
+      if (!session) {
+        throw new Error('Session not found');
+      }
+      await repository.setStatus(sessionId, 'active');
+      return { ready: true };
+    },
+    async getReadiness(sessionId) {
+      const session = await repository.findById(sessionId);
+      if (!session) {
+        return null;
+      }
+      return { ready: session.status === 'active' };
     }
   };
 }

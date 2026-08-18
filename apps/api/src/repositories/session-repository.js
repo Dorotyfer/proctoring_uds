@@ -33,4 +33,27 @@ export class SessionRepository {
 
     return session;
   }
+
+  async findById(id) {
+    const [rows] = await this.database.execute(
+      `SELECT
+        id AS id,
+        moodle_user_id AS moodleUserId,
+        moodle_course_id AS moodleCourseId,
+        moodle_quiz_id AS moodleQuizId,
+        moodle_attempt_id AS moodleAttemptId,
+        device_mode AS deviceMode,
+        status AS status,
+        issued_at AS issuedAt,
+        expires_at AS expiresAt,
+        created_at AS createdAt
+      FROM proctoring_sessions WHERE id = ?`,
+      [id]
+    );
+    return rows[0] ?? null;
+  }
+
+  async setStatus(id, status) {
+    await this.database.execute('UPDATE proctoring_sessions SET status = ? WHERE id = ?', [status, id]);
+  }
 }

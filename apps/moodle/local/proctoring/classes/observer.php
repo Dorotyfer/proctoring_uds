@@ -10,6 +10,10 @@ final class observer {
     public static function attempt_started(\mod_quiz\event\attempt_started $event): void {
         global $CFG, $DB, $SESSION;
 
+        if (!$DB->get_manager()->table_exists(new \xmldb_table('quizaccess_proctoring'))) {
+            return;
+        }
+
         $attempt = $event->get_record_snapshot('quiz_attempts', $event->objectid);
         $quiz = $event->get_record_snapshot('quiz', $attempt->quiz);
         if (!$DB->record_exists('quizaccess_proctoring', ['quizid' => $quiz->id, 'enabled' => 1])) {

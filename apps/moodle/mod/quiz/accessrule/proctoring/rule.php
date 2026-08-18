@@ -26,15 +26,18 @@ class quizaccess_proctoring extends access_rule_base {
         return get_string('proctoringrequired', 'quizaccess_proctoring');
     }
 
-    public function setup_attempt_page($page) {
-        global $SESSION;
-
+    public function prevent_access() {
+        global $DB, $SESSION;
         $attemptid = optional_param('attempt', 0, PARAM_INT);
-        if (!empty($attemptid) && !empty($SESSION->local_proctoring_launch_tokens[$attemptid])) {
-            $page->requires->js_call_amd('quizaccess_proctoring/launch', 'init', [
-                (new \moodle_url('/local/proctoring/launch.php', ['attempt' => $attemptid]))->out(false),
-            ]);
+        if (!$attemptid) {
+            return false;
         }
+        $session = $DB->get_record('local_proctoring_attempt', ['quizattemptid' => $attemptid]);
+        if ($session && !empty($SESSION->local_proctoring_ready_attempts[$attemptid])) {
+            return false;
+        }
+        $url = new \moodle_url('/local/proctoring/prepare.php', ['attempt' => $attemptid]);
+        return get_string('preparationrequired', 'quizaccess_proctoring', \html_writer::link($url, get_string('startpreparation', 'quizaccess_proctoring')));
     }
 
     public static function add_settings_form_fields(mod_quiz_mod_form $quizform, MoodleQuickForm $mform) {

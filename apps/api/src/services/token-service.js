@@ -80,6 +80,9 @@ export function createTokenService({ secret, now = () => new Date() }) {
       const signingInput = `${encode(header)}.${encode(payload)}`;
 
       return `${signingInput}.${sign(signingInput, secret)}`;
+    },
+    verifyBrowserToken(token) {
+      return verifyBrowserToken(token, secret, { now: now() });
     }
   };
 }

@@ -7,7 +7,8 @@ defined('MOODLE_INTERNAL') || die();
 
 /** Issues a short-lived, course-scoped RS256 panel token. */
 final class panel_link {
-    public static function create_for_course(int $userid, int $courseid): \moodle_url {
+    /** Returns the panel's actual SSO endpoint and a POST-only signed assertion. */
+    public static function create_for_course(int $userid, int $courseid): array {
         $context = \context_course::instance($courseid);
         $canviewinstitution = has_capability('local/proctoring:viewinstitutionreports', \context_system::instance(), $userid);
         if (!$canviewinstitution && !has_capability('local/proctoring:viewowncoursereports', $context, $userid)) {
@@ -28,9 +29,10 @@ final class panel_link {
             $capabilities[] = 'local/proctoring:viewinstitutionreports';
         }
 
-        return new \moodle_url(rtrim(self::config('panelurl'), '/') . '/sso/consume', [
+        return [
+            'action' => rtrim(self::config('panelurl'), '/') . '/sso/consume',
             'token' => self::issue_token($userid, $capabilities, [$courseid]),
-        ]);
+        ];
     }
 
     private static function issue_token(int $userid, array $capabilities, array $courseids): string {
@@ -47,9 +49,6 @@ final class panel_link {
             'capabilities' => array_values(array_unique($capabilities)),
             'courseIds' => array_map('strval', $courseids),
             'expiresAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $now + 300),
-            'iat' => $now,
-            'exp' => $now + 300,
-            'aud' => 'proctoring-panel',
         ], JSON_THROW_ON_ERROR));
         $signed = $header . '.' . $payload;
         if (!openssl_sign($signed, $signature, $privatekey, OPENSSL_ALGO_SHA256) ||

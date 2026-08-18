@@ -82,4 +82,39 @@ final class api_client {
 
         return $decoded;
     }
+
+    /** Checks the API-verified preparation state without exposing a browser token. */
+    public function is_session_ready(string $sessionid): bool {
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $sessionid)) {
+            return false;
+        }
+        $apiurl = rtrim(($this->configprovider)('apiurl'), '/');
+        $integrationkey = ($this->configprovider)('integrationkey');
+        if ($apiurl === '' || $integrationkey === '' || parse_url($apiurl, PHP_URL_SCHEME) !== 'https') {
+            throw new \moodle_exception('configurationerror', 'local_proctoring');
+        }
+
+        $curl = ($this->curlfactory)();
+        $curl->setopt([
+            'CURLOPT_CONNECTTIMEOUT' => 5,
+            'CURLOPT_TIMEOUT' => 5,
+            'CURLOPT_SSL_VERIFYPEER' => true,
+            'CURLOPT_SSL_VERIFYHOST' => 2,
+            'CURLOPT_FOLLOWLOCATION' => false,
+        ]);
+        $curl->setHeader('Accept: application/json');
+        $curl->setHeader('X-Moodle-Integration-Key: ' . $integrationkey);
+        $curl->setHeader('X-Correlation-ID: ' . ($this->correlationidgenerator)());
+        try {
+            $response = $curl->get($apiurl . '/v1/internal/sessions/' . rawurlencode($sessionid) . '/readiness');
+            $info = $curl->get_info();
+            if ($curl->get_errno() || !is_array($info) || ($info['http_code'] ?? 0) !== 200) {
+                return false;
+            }
+            $decoded = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
+            return isset($decoded['ready']) && $decoded['ready'] === true;
+        } catch (\Throwable $exception) {
+            return false;
+        }
+    }
 }

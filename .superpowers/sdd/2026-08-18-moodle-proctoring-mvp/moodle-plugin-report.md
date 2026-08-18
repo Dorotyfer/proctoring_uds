@@ -40,3 +40,19 @@ The implementation uses the Moodle 4.3 `quizaccess` settings/rule interface and 
 - `git diff --check` passed.
 - `pnpm --filter @proctoring/contracts test` passed: 6 tests.
 - `pnpm --filter @proctoring/api test` passed: 7 tests, including Moodle timestamp contract coverage.
+
+## Re-review remediation (commit pending)
+
+- Panel SSO now uses the planned panel endpoint `POST /sso/consume` through `local/proctoring/panel.php`; the signed assertion is placed in an auto-submitted form body, never in a URL. The assertion payload matches the strict `PanelClaims` shape exactly.
+- `quizaccess_proctoring` now declares `local_proctoring` as a versioned dependency. The local observer also safely exits if the access-rule table is unavailable.
+- Replaced popup launch behavior with a required preparation gate. The access rule denies the attempt until Moodle calls the API's server-only readiness endpoint and confirms the browser-token-authorized ready state.
+- The browser token is sent only by a server-rendered POST to the panel's `/sessions/launch` route. It is not in a path, query string, redirect, history entry, or referrer. The panel must call `POST /v1/sessions/:sessionId/ready` with that token and then navigate to the supplied Moodle return URL.
+- Added API readiness routes, persistence methods and an integration test covering the ready-state transition and Moodle's server-side readback.
+
+### Re-review remediation verification
+
+- PHP syntax passed for all local and quiz-access plugin PHP files.
+- Both plugin `install.xml` files parsed successfully.
+- `git diff --check` passed.
+- `pnpm --filter @proctoring/contracts test` passed: 6 tests.
+- `pnpm --filter @proctoring/api test` passed: 8 tests.
