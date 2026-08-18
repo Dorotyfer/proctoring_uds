@@ -2,6 +2,9 @@
   "name": "proctoring-uds",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.6.0"
+  },
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up --detach --wait --wait-timeout 60",

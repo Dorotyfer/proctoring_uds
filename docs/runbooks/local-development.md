@@ -2,7 +2,7 @@
 
 ## Requisitos
 
-- Node.js 20 o posterior.
+- Node.js 20.6 o posterior.
 - pnpm 11 o posterior.
 - Docker Desktop con Docker Compose v2 habilitado.
 
