@@ -56,3 +56,18 @@ The implementation uses the Moodle 4.3 `quizaccess` settings/rule interface and 
 - `git diff --check` passed.
 - `pnpm --filter @proctoring/contracts test` passed: 6 tests.
 - `pnpm --filter @proctoring/api test` passed: 8 tests.
+
+## Readiness security remediation (commit pending)
+
+- Removed the browser-reachable readiness transition. `POST /v1/sessions/:sessionId/preparation` authenticates the browser token but only stores an evidence submission and returns `202 submitted`.
+- A separate `POST /v1/internal/sessions/:sessionId/verify-preparation` transition requires the API worker key, which is distinct from Moodle's integration key. The transition runs a server-configured preparation verifier and only then marks the session `active`.
+- Moodle's `ready.php` remains read-only with respect to the API: it calls the internal readiness observation endpoint and enables the local attempt gate only after the API reports ready. It has no route or credential to activate readiness.
+- Updated the browser/panel integration contract: the panel submits preparation evidence, the worker verifies it, and only after verification should the panel navigate to Moodle's supplied return URL.
+- Added an API test proving a browser submission leaves readiness false and a Moodle integration key is rejected by the verification transition.
+
+### Readiness security verification
+
+- PHP syntax passed for all local and quiz-access plugin PHP files.
+- `git diff --check` passed.
+- `pnpm --filter @proctoring/contracts test` passed: 6 tests.
+- `pnpm --filter @proctoring/api test` passed: 8 tests.

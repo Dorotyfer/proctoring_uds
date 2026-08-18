@@ -5,10 +5,12 @@ import { createApp } from '../src/app.js';
 
 const integrationKey = 'moodle-integration-key';
 const tokenSecret = 'test-token-secret-that-is-long-enough';
+const preparationWorkerKey = 'private-worker-key';
 const now = new Date('2026-08-18T12:00:00.000Z');
 
 function repository() {
   const items = new Map();
+  const preparations = new Map();
   return {
     async create(session) {
       items.set(session.id, session);
@@ -19,12 +21,25 @@ function repository() {
     },
     async setStatus(id, status) {
       items.set(id, { ...items.get(id), status });
+    },
+    async savePreparation(submission) {
+      preparations.set(submission.sessionId, submission);
+    },
+    async findPreparation(sessionId) {
+      return preparations.get(sessionId) ?? null;
     }
   };
 }
 
-test('requires browser-token verified readiness before Moodle allows the attempt', async (t) => {
-  const app = createApp({ integrationKey, tokenSecret, repository: repository(), now: () => now });
+test('only server-side preparation verification can make a session ready', async (t) => {
+  const app = createApp({
+    integrationKey,
+    preparationWorkerKey,
+    preparationVerifier: async (submission) => submission.evidence.challengeResponse === 'verified-by-server',
+    tokenSecret,
+    repository: repository(),
+    now: () => now
+  });
   t.after(() => app.close());
   const created = await app.inject({
     method: 'POST',
@@ -45,10 +60,34 @@ test('requires browser-token verified readiness before Moodle allows the attempt
 
   response = await app.inject({
     method: 'POST',
-    url: `/v1/sessions/${created.session.id}/ready`,
-    headers: { authorization: `Bearer ${created.browserToken}` }
+    url: `/v1/internal/sessions/${created.session.id}/verify-preparation`,
+    headers: { 'x-moodle-integration-key': integrationKey }
+  });
+  assert.equal(response.statusCode, 401);
+
+  response = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${created.session.id}/preparation`,
+    headers: { authorization: `Bearer ${created.browserToken}` },
+    payload: { challengeResponse: 'verified-by-server' }
+  });
+  assert.equal(response.statusCode, 202);
+  assert.deepEqual(response.json(), { status: 'submitted' });
+
+  response = await app.inject({
+    method: 'GET',
+    url: `/v1/internal/sessions/${created.session.id}/readiness`,
+    headers: { 'x-moodle-integration-key': integrationKey }
+  });
+  assert.deepEqual(response.json(), { ready: false });
+
+  response = await app.inject({
+    method: 'POST',
+    url: `/v1/internal/sessions/${created.session.id}/verify-preparation`,
+    headers: { 'x-proctoring-worker-key': preparationWorkerKey }
   });
   assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { ready: true });
 
   response = await app.inject({
     method: 'GET',

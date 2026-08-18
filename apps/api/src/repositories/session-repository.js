@@ -56,4 +56,29 @@ export class SessionRepository {
   async setStatus(id, status) {
     await this.database.execute('UPDATE proctoring_sessions SET status = ? WHERE id = ?', [status, id]);
   }
+
+  async savePreparation(submission) {
+    await this.database.execute(
+      `INSERT INTO proctoring_preparation_submissions (session_id, evidence_json, submitted_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE evidence_json = VALUES(evidence_json), submitted_at = VALUES(submitted_at)`,
+      [submission.sessionId, JSON.stringify(submission.evidence), submission.submittedAt]
+    );
+  }
+
+  async findPreparation(sessionId) {
+    const [rows] = await this.database.execute(
+      `SELECT session_id AS sessionId, evidence_json AS evidenceJson, submitted_at AS submittedAt
+       FROM proctoring_preparation_submissions WHERE session_id = ?`,
+      [sessionId]
+    );
+    if (!rows[0]) {
+      return null;
+    }
+    return {
+      sessionId: rows[0].sessionId,
+      evidence: JSON.parse(rows[0].evidenceJson),
+      submittedAt: rows[0].submittedAt
+    };
+  }
 }

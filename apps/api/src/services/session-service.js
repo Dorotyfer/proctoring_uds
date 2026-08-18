@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-export function createSessionService({ repository, tokenService, now = () => new Date() }) {
+export function createSessionService({ repository, tokenService, preparationVerifier, now = () => new Date() }) {
   return {
     async create(input) {
       const session = {
@@ -22,7 +22,7 @@ export function createSessionService({ repository, tokenService, now = () => new
         browserToken: tokenService.issueBrowserToken(persistedSession)
       };
     },
-    async markReady(sessionId, browserToken) {
+    async submitPreparation(sessionId, browserToken, evidence) {
       const claims = tokenService.verifyBrowserToken(browserToken);
       if (claims.sessionId !== sessionId) {
         throw new Error('Browser token is not valid for this session');
@@ -30,6 +30,23 @@ export function createSessionService({ repository, tokenService, now = () => new
       const session = await repository.findById(sessionId);
       if (!session) {
         throw new Error('Session not found');
+      }
+      await repository.savePreparation({
+        sessionId,
+        evidence,
+        submittedAt: now().toISOString()
+      });
+      return { status: 'submitted' };
+    },
+    async verifyPreparation(sessionId) {
+      const session = await repository.findById(sessionId);
+      const submission = await repository.findPreparation(sessionId);
+      if (!session || !submission || !preparationVerifier) {
+        return { ready: false };
+      }
+      const verified = await preparationVerifier(submission, session);
+      if (!verified) {
+        return { ready: false };
       }
       await repository.setStatus(sessionId, 'active');
       return { ready: true };
