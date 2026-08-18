@@ -4,10 +4,17 @@ const dependencies = [
   ['MinIO', checkMinio]
 ];
 
+const postgresPort = process.env.POSTGRES_PORT || '5432';
+const redisPort = process.env.REDIS_PORT || '6379';
+const minioApiPort = process.env.MINIO_API_PORT || '9000';
+const databaseUrl = process.env.DATABASE_URL || `postgresql://${process.env.POSTGRES_USER || 'proctoring'}:${process.env.POSTGRES_PASSWORD || 'proctoring'}@localhost:${postgresPort}/${process.env.POSTGRES_DB || 'proctoring'}`;
+const redisUrl = process.env.REDIS_URL || `redis://localhost:${redisPort}`;
+const minioEndpoint = process.env.MINIO_ENDPOINT || `http://localhost:${minioApiPort}/minio/health/live`;
+
 async function checkPostgres() {
   const { Client } = await import('pg');
   const client = new Client({
-    connectionString: process.env.DATABASE_URL || 'postgresql://proctoring:proctoring@localhost:5432/proctoring',
+    connectionString: databaseUrl,
     connectionTimeoutMillis: 3000
   });
 
@@ -22,7 +29,7 @@ async function checkPostgres() {
 async function checkRedis() {
   const { createClient } = await import('redis');
   const client = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: redisUrl,
     socket: {
       connectTimeout: 3000,
       reconnectStrategy: false
@@ -39,8 +46,7 @@ async function checkRedis() {
 }
 
 async function checkMinio() {
-  const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000/minio/health/live';
-  const response = await fetch(endpoint, { signal: AbortSignal.timeout(3000) });
+  const response = await fetch(minioEndpoint, { signal: AbortSignal.timeout(3000) });
 
   if (!response.ok) {
     throw new Error(`received HTTP ${response.status}`);

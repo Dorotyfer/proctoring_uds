@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up --detach --wait --wait-timeout 60",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
-    "infra:check": "node scripts/check-infra.mjs"
+    "infra:check": "node --env-file=.env scripts/check-infra.mjs"
   },
   "devDependencies": {
     "pg": "^8.16.3",
