@@ -8,8 +8,8 @@ defined('MOODLE_INTERNAL') || die();
 /**
  * Integration boundary for a future supported quiz-access-rule adapter.
  *
- * This class intentionally does not register a pre-attempt hook. A supported adapter
- * must call create_session_for_attempt() only after Moodle has created an attempt.
+ * A quizaccess rule and the synchronous mod_quiz attempt_started event call this
+ * adapter after Moodle has assigned an attempt id and before startattempt.php redirects.
  */
 final class quiz_access_rule_adapter {
     /** @var session_manager */
@@ -19,7 +19,7 @@ final class quiz_access_rule_adapter {
         $this->sessionmanager = $sessionmanager ?? new session_manager();
     }
 
-    public function create_session_for_attempt(\stdClass $attempt, bool $nativesebactive): array {
-        return $this->sessionmanager->create_for_attempt($attempt, $nativesebactive ? 'seb' : 'browser');
+    public function create_session_for_attempt(\stdClass $attempt, \stdClass $quiz, bool $nativesebactive): array {
+        return $this->sessionmanager->create_for_attempt($attempt, $quiz, $nativesebactive ? 'seb' : 'browser');
     }
 }

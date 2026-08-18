@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/quiz/accessrule/proctoring/db" VERSION="2026081800" COMMENT="XMLDB file for quizaccess_proctoring">
+  <TABLES>
+    <TABLE NAME="quizaccess_proctoring" COMMENT="Proctoring requirement per quiz">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="quizid_uix" TYPE="unique" FIELDS="quizid" />
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>

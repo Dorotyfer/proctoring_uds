@@ -23,7 +23,7 @@ final class api_client_test extends \advanced_testcase {
                 $this->url = $url;
                 $this->body = $body;
                 return json_encode([
-                    'session' => ['id' => 'session-1', 'expiresAt' => '2026-08-18T13:00:00+00:00'],
+                    'session' => ['id' => '11111111-1111-4111-8111-111111111111', 'expiresAt' => '2026-08-18T13:00:00.000Z'],
                     'browserToken' => 'short-lived-browser-token',
                 ]);
             }
@@ -47,11 +47,12 @@ final class api_client_test extends \advanced_testcase {
 
         $this->assertSame('https://proctoring.example.test/v1/internal/sessions', $curl->url);
         $this->assertSame(['CURLOPT_CONNECTTIMEOUT' => 5, 'CURLOPT_TIMEOUT' => 5,
-            'CURLOPT_SSL_VERIFYPEER' => true, 'CURLOPT_SSL_VERIFYHOST' => 2], $curl->options);
+            'CURLOPT_SSL_VERIFYPEER' => true, 'CURLOPT_SSL_VERIFYHOST' => 2,
+            'CURLOPT_FOLLOWLOCATION' => false], $curl->options);
         $this->assertContains('X-Moodle-Integration-Key: server-secret', $curl->headers);
         $this->assertContains('X-Correlation-ID: correlation-1', $curl->headers);
         $this->assertSame(['moodleAttemptId' => '12'], json_decode($curl->body, true));
-        $this->assertSame('session-1', $response['session']['id']);
+        $this->assertSame('11111111-1111-4111-8111-111111111111', $response['session']['id']);
     }
 
     public function test_create_session_maps_api_failures_to_safe_exception(): void {

@@ -48,6 +48,7 @@ final class api_client {
             'CURLOPT_TIMEOUT' => 5,
             'CURLOPT_SSL_VERIFYPEER' => true,
             'CURLOPT_SSL_VERIFYHOST' => 2,
+            'CURLOPT_FOLLOWLOCATION' => false,
         ]);
         $curl->setHeader('Content-Type: application/json');
         $curl->setHeader('Accept: application/json');
@@ -71,8 +72,11 @@ final class api_client {
             throw new \moodle_exception('sessioncreationfailed', 'local_proctoring', '', null, $exception->getMessage());
         }
         if (!isset($decoded['session']['id'], $decoded['session']['expiresAt'], $decoded['browserToken']) ||
-                !is_string($decoded['session']['id']) || !is_string($decoded['session']['expiresAt']) ||
-                !is_string($decoded['browserToken'])) {
+                !is_string($decoded['session']['id']) ||
+                !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $decoded['session']['id']) ||
+                !is_string($decoded['session']['expiresAt']) ||
+                !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/', $decoded['session']['expiresAt']) ||
+                !is_string($decoded['browserToken']) || $decoded['browserToken'] === '') {
             throw new \moodle_exception('sessioncreationfailed', 'local_proctoring');
         }
 

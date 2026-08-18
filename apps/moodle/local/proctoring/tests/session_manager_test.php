@@ -16,7 +16,7 @@ final class session_manager_test extends \advanced_testcase {
                     throw new \RuntimeException('Expected SEB mode.');
                 }
                 return json_encode([
-                    'session' => ['id' => 'session-7', 'expiresAt' => '2026-08-18T13:00:00+00:00'],
+                    'session' => ['id' => '22222222-2222-4222-8222-222222222222', 'expiresAt' => '2026-08-18T13:00:00.000Z'],
                     'browserToken' => 'browser-token-must-not-persist',
                 ]);
             }
@@ -39,16 +39,15 @@ final class session_manager_test extends \advanced_testcase {
         $result = $manager->create_for_attempt((object)[
             'id' => 4,
             'userid' => 5,
-            'courseid' => 6,
-            'quizid' => 7,
-        ], 'seb');
+            'quiz' => 7,
+        ], (object)['id' => 7, 'course' => 6], 'seb');
 
-        $this->assertSame('session-7', $result['sessionid']);
+        $this->assertSame('22222222-2222-4222-8222-222222222222', $result['sessionid']);
         $this->assertSame('browser-token-must-not-persist', $result['browsertoken']);
         $this->assertSame([
             'attemptid' => 4,
-            'sessionid' => 'session-7',
-            'expiresat' => '2026-08-18T13:00:00+00:00',
+            'sessionid' => '22222222-2222-4222-8222-222222222222',
+            'expiresat' => '2026-08-18T13:00:00.000Z',
         ], $written);
         $this->assertNotContains('browser-token-must-not-persist', $written);
     }
@@ -56,6 +55,6 @@ final class session_manager_test extends \advanced_testcase {
     public function test_create_for_attempt_rejects_unknown_device_mode(): void {
         $manager = new session_manager();
         $this->expectException(\invalid_parameter_exception::class);
-        $manager->create_for_attempt((object)['id' => 4, 'userid' => 5, 'courseid' => 6, 'quizid' => 7], 'desktop');
+        $manager->create_for_attempt((object)['id' => 4, 'userid' => 5, 'quiz' => 7], (object)['id' => 7, 'course' => 6], 'desktop');
     }
 }

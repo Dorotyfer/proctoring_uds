@@ -35,6 +35,12 @@ if ($hassiteconfig) {
         70,
         8
     ));
+    $settings->add(new admin_setting_configpasswordunmask(
+        'local_proctoring/panelprivatekey',
+        get_string('panelprivatekey', 'local_proctoring'),
+        get_string('panelprivatekey_desc', 'local_proctoring'),
+        ''
+    ));
 
     $ADMIN->add('localplugins', $settings);
 }
