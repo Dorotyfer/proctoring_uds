@@ -33,3 +33,15 @@ Las pruebas nuevas se ejecutaron primero contra la versión anterior y fallaron 
 ```powershell
 pnpm infra:check
 ```
+
+## Correcciones de revisión
+
+- `EVIDENCE_STORAGE_PATH` y `APACHE_DOCUMENT_ROOTS` ahora son obligatorios. El chequeo confirma que la evidencia existe, es un directorio escribible y no está dentro de ningún directorio público Apache configurado.
+- El runbook exige enumerar cada `DocumentRoot` y destino local de `Alias`, y contiene comandos `icacls` verificables para retirar herencia, otorgar acceso a API/worker y denegar lectura a la identidad de Apache.
+- Las cinco variables `MYSQL_*` son obligatorias. `MYSQL_PORT` debe ser un entero decimal completo entre 1 y 65535; no existen valores de reserva silenciosos.
+- `pnpm db:migrate:sessions` carga `.env` mediante Node y ejecuta la migración con `mysql2`, sin exponer la contraseña como argumento de la línea de comandos.
+
+### Verificación de las correcciones
+
+- `pnpm test:infra`: 8 pruebas, 0 fallos.
+- El `.env` local heredado produce errores de configuración descriptivos para `pnpm infra:check` y `pnpm db:migrate:sessions`; no intenta una conexión de reserva.

@@ -36,7 +36,7 @@ scripts/check-infra.mjs        Local dependency health check
 docs/runbooks/                 Installation and acceptance guides
 ```
 
-> **Environment revision (approved 2026-08-18):** The MVP uses only a MySQL connection configured in `.env`, a `scripts/check-infra.mjs` MySQL-only check, and a writable `EVIDENCE_STORAGE_PATH` outside Apache's document root. Tasks 3, 6 and 7 use MySQL; Task 6 claims jobs atomically from a MySQL `proctoring_jobs` table; Task 7 uses the encrypted local evidence path. Do not add external infrastructure dependencies.
+> **Environment revision (approved 2026-08-18):** The MVP uses only a MySQL connection configured in `.env`, a `scripts/check-infra.mjs` MySQL-only check, and a writable `EVIDENCE_STORAGE_PATH` outside every configured `APACHE_DOCUMENT_ROOTS` path. `APACHE_DOCUMENT_ROOTS` must list each Apache `DocumentRoot` and local `Alias` target. Tasks 3, 6 and 7 use MySQL; Task 6 claims jobs atomically from a MySQL `proctoring_jobs` table; Task 7 uses the encrypted local evidence path. Do not add external infrastructure dependencies.
 
 ### Task 1: Create the reproducible development environment
 
@@ -46,7 +46,7 @@ docs/runbooks/                 Installation and acceptance guides
 - Create: `docs/runbooks/local-development.md`
 - Test: `scripts/check-infra.mjs`
 
-**Interfaces:** Validates the MySQL instance configured in `.env` and the evidence path managed outside Apache's document root.
+**Interfaces:** Validates explicit MySQL settings from `.env`, plus an existing writable evidence path outside every `APACHE_DOCUMENT_ROOTS` public path.
 
 - [ ] **Step 1: Write a failing dependency check**
 
@@ -64,7 +64,7 @@ Expected: exit code `1` with unavailable dependency names.
 
 - [ ] **Step 3: Add workspace and Compose services**
 
-Create a private pnpm workspace. Add `mysql2`, document `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` and `EVIDENCE_STORAGE_PATH`, and add the `infra:check` script. The evidence path must be outside Apache's document root and readable only by the API/worker service account.
+Create a private pnpm workspace. Add `mysql2`, document `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `EVIDENCE_STORAGE_PATH` and `APACHE_DOCUMENT_ROOTS`, and add the `infra:check` script. Reject missing or malformed database configuration. The evidence path must exist, be writable by the API/worker service account, be outside all configured Apache public paths, and deny Apache read access through the operating-system ACL.
 
 - [ ] **Step 4: Verify the environment**
 

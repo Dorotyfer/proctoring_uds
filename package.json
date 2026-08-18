@@ -8,7 +8,8 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "infra:check": "node --env-file=.env scripts/check-infra.mjs",
-    "test:infra": "node --test scripts/check-infra.test.mjs",
+    "db:migrate:sessions": "node --env-file=.env scripts/apply-migration.mjs apps/api/src/db/migrations/001_sessions.sql",
+    "test:infra": "node --test scripts/check-infra.test.mjs scripts/mysql-config.test.mjs scripts/apply-migration.test.mjs",
     "test": "pnpm --filter @proctoring/contracts test && pnpm --filter @proctoring/api test && pnpm test:infra"
   },
   "devDependencies": {

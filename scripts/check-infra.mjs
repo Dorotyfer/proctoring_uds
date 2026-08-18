@@ -1,17 +1,9 @@
-const dependencies = [['MySQL', checkMySql]];
+import { ConfigurationError, createInfrastructureConfig } from './mysql-config.mjs';
 
-const mysqlConfig = {
-  host: process.env.MYSQL_HOST || '127.0.0.1',
-  port: Number.parseInt(process.env.MYSQL_PORT || '3306', 10),
-  user: process.env.MYSQL_USER || 'proctoring',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'proctoring',
-  connectTimeout: 3000
-};
-
-async function checkMySql() {
+async function checkInfrastructure() {
+  const infrastructure = await createInfrastructureConfig(process.env);
   const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(mysqlConfig);
+  const connection = await mysql.createConnection(infrastructure.mysql);
 
   try {
     await connection.query('SELECT 1');
@@ -20,13 +12,14 @@ async function checkMySql() {
   }
 }
 
-const results = await Promise.allSettled(dependencies.map(([, check]) => check()));
-const failedDependencies = results
-  .map((result, index) => result.status === 'rejected' ? dependencies[index][0] : null)
-  .filter(Boolean);
-
-if (failedDependencies.length > 0) {
-  console.error(`Unavailable dependencies: ${failedDependencies.join(', ')}`);
+try {
+  await checkInfrastructure();
+} catch (error) {
+  if (error instanceof ConfigurationError) {
+    console.error(`Configuration error: ${error.message}`);
+  } else {
+    console.error('Unavailable dependencies: MySQL');
+  }
   process.exit(1);
 }
 
