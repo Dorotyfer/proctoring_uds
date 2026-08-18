@@ -37,6 +37,8 @@ scripts/check-infra.mjs        Local dependency health check
 docs/runbooks/                 Installation and acceptance guides
 ```
 
+> **Environment revision (approved 2026-08-18):** Task 1's Docker Compose, PostgreSQL, Redis and MinIO requirements are replaced by a MySQL connection configured in `.env`, a `scripts/check-infra.mjs` MySQL-only check, and a writable `EVIDENCE_STORAGE_PATH` outside Apache's document root. Tasks 3, 6 and 7 use MySQL; Task 6 claims jobs atomically from a MySQL `proctoring_jobs` table; Task 7 uses the encrypted local evidence path. Do not add Docker, Redis, BullMQ, PostgreSQL, MinIO or S3 dependencies.
+
 ### Task 1: Create the reproducible development environment
 
 **Files:**
