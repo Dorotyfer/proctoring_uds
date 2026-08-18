@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/proctoring/db" VERSION="2026081800" COMMENT="XMLDB file for local_proctoring">
+  <TABLES>
+    <TABLE NAME="local_proctoring_attempt" COMMENT="External proctoring session metadata for quiz attempts">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="quizattemptid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="sessionid" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="expiresat" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="quizattemptid_uix" TYPE="unique" FIELDS="quizattemptid" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="sessionid_ix" UNIQUE="false" FIELDS="sessionid" />
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
