@@ -4,8 +4,12 @@
 
 - Fase 0: implementada; falta validación contra la instancia PostgreSQL de destino.
 - Fase 1: implementada; falta ejecutar PHPUnit e instalación en un Moodle 4.3.3 real.
-- Fase 2: en curso; sesiones, tokens, estados y recepción de eventos ya están implementados.
-- Fases 3 a 7: pendientes.
+- Fase 2: implementada para sesiones, tokens, estados, eventos y alertas; la auditoría administrativa se completa junto con el panel.
+- Fase 3: implementada; falta validación con cámara real en los dispositivos del piloto.
+- Fase 4: implementada; falta prueba integrada dentro de una instalación Moodle real.
+- Fase 5: implementada; falta validar el proveedor S3 y la política institucional de retención.
+- Fase 6: implementada; falta prueba integrada con roles y cursos de un Moodle real.
+- Fase 7: automatización y runbooks implementados; falta ejecutar la aceptación institucional en Moodle, SEB, dispositivos reales, PostgreSQL y S3 de destino.
 
 ## Principios no negociables
 

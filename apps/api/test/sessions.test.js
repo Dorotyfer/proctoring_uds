@@ -35,6 +35,10 @@ async function createTestApp() {
     async activate(id) {
       return id === storedSession.id ? { ...storedSession, status: 'active' } : null;
     }
+  }, {
+    async storeIdentity() {
+      return { id: '9afee813-b224-4ec7-9ea9-95d9bed1717e' };
+    }
   });
   return buildApp({
     eventService: {},
@@ -100,6 +104,19 @@ test('renews a short-lived browser token without storing it in Moodle', async ()
   await app.close();
 });
 
+test('lets Moodle confirm preparation status server to server', async () => {
+  const app = await createTestApp();
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/internal/sessions/e3d9cce1-a5b8-4bfe-88e1-68a57475266d/status',
+    headers: { 'x-moodle-integration-key': 'moodle-key' }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().session.status, 'pending');
+  await app.close();
+});
+
 test('completes a remote session when Moodle finishes the attempt', async () => {
   const app = await createTestApp();
   const response = await app.inject({
@@ -129,7 +146,12 @@ test('exposes only browser-safe session data and activates after successful chec
     method: 'POST',
     url: '/v1/sessions/e3d9cce1-a5b8-4bfe-88e1-68a57475266d/activate',
     headers,
-    payload: { identityPassed: true, livenessPassed: true }
+    payload: {
+      identityPassed: true,
+      livenessPassed: true,
+      livenessChallenge: ['blink', 'turn-left'],
+      referenceCapture: `data:image/jpeg;base64,${Buffer.from('jpeg').toString('base64')}`
+    }
   });
 
   assert.equal(session.statusCode, 200);

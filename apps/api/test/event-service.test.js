@@ -24,7 +24,9 @@ test('validates session state and event timestamps before persistence', async ()
       return { issuedAt: new Date(Date.now() - 60_000).toISOString() };
     }
   };
-  const service = createEventService(activeSessionService, repository);
+  const service = createEventService(activeSessionService, repository, {
+    async classify() { return null; }
+  });
   await service.record(sessionId, input);
 
   assert.equal(persisted.length, 1);
@@ -37,7 +39,8 @@ test('validates session state and event timestamps before persistence', async ()
 test('rejects events when the session is unavailable', async () => {
   const service = createEventService(
     { async getActive() { return null; } },
-    { async create() { throw new Error('must not persist'); } }
+    { async create() { throw new Error('must not persist'); } },
+    { async classify() { throw new Error('must not classify'); } }
   );
 
   await assert.rejects(() => service.record(sessionId, input), SessionUnavailableError);

@@ -16,10 +16,13 @@ async function createTestApp() {
   const eventService = {
     async record(receivedSessionId, input) {
       return {
-        id: '3a60ebc0-c0be-4a2d-a2ce-a49cd9e2f20f',
-        sessionId: receivedSessionId,
-        receivedAt: new Date().toISOString(),
-        ...input
+        alert: null,
+        event: {
+          id: '3a60ebc0-c0be-4a2d-a2ce-a49cd9e2f20f',
+          sessionId: receivedSessionId,
+          receivedAt: new Date().toISOString(),
+          ...input
+        }
       };
     }
   };

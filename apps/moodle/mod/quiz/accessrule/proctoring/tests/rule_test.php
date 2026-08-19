@@ -27,4 +27,50 @@ class rule_test extends \advanced_testcase {
         \quizaccess_proctoring::delete_settings($quiz);
         $this->assertFalse($DB->record_exists('quizaccess_proctoring', ['quizid' => $quiz->id]));
     }
+
+    public function test_uses_native_seb_mode_when_quiz_requires_safe_exam_browser(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->get_plugin_generator('mod_quiz')->create_instance([
+            'course' => $course->id
+        ]);
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id, $course->id, false, MUST_EXIST);
+        $templateid = $DB->insert_record('quizaccess_seb_template', (object)[
+            'name' => 'Pilot SEB template',
+            'description' => 'Deterministic acceptance fixture',
+            'content' => '',
+            'enabled' => 1,
+            'sortorder' => 1,
+            'usermodified' => $USER->id
+        ]);
+        $DB->insert_record('quizaccess_seb_quizsettings', (object)[
+            'quizid' => $quiz->id,
+            'cmid' => $cm->id,
+            'templateid' => $templateid,
+            'requiresafeexambrowser' => 1,
+            'usermodified' => $USER->id
+        ]);
+        $settings = (object)['allowedmode' => 'either', 'quizid' => $quiz->id];
+
+        $this->assertSame('seb', $this->resolve_device_mode($settings));
+    }
+
+    public function test_mobile_browser_policy_remains_browser_without_seb_requirement(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->get_plugin_generator('mod_quiz')->create_instance([
+            'course' => $course->id
+        ]);
+        $settings = (object)['allowedmode' => 'browser', 'quizid' => $quiz->id];
+
+        $this->assertSame('browser', $this->resolve_device_mode($settings));
+    }
+
+    private function resolve_device_mode(\stdClass $settings): string {
+        $method = new \ReflectionMethod(observer::class, 'resolve_device_mode');
+        return $method->invoke(null, $settings);
+    }
 }

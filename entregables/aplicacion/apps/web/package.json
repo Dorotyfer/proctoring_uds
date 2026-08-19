@@ -1,0 +1,27 @@
+{
+  "name": "@proctoring/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "node scripts/copy-human-models.mjs",
+    "predev": "node scripts/copy-human-models.mjs",
+    "pretest": "node scripts/copy-human-models.mjs",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vladmandic/human": "^3.3.6",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^26.1.0",
+    "vitest": "^4.1.11"
+  }
+}
