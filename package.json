@@ -1,0 +1,14 @@
+{
+  "name": "proctoring-uds",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "type": "module",
+  "scripts": {
+    "api:dev": "pnpm --filter @proctoring/api dev",
+    "api:migrate": "pnpm --filter @proctoring/api migrate",
+    "api:start": "pnpm --filter @proctoring/api start",
+    "api:test": "pnpm --filter @proctoring/api test",
+    "test": "pnpm -r test"
+  }
+}
