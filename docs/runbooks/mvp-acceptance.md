@@ -5,7 +5,7 @@ Esta guía registra resultados reales. No marque una fila como aprobada sin adju
 ## Preparación
 
 1. Instale Moodle 4.3.3 o superior, los dos plugins y Safe Exam Browser nativo.
-2. Ejecute las migraciones PostgreSQL `001` a `004`.
+2. Ejecute las migraciones MariaDB `001` a `004`.
 3. Configure API, aplicación web y bucket S3 privado según `.env.example`.
 4. Cree dos cursos (`pilot-course-a` y `pilot-course-b`), un docente limitado a cada curso y un administrador institucional.
 5. Genere datos reproducibles con:
@@ -77,7 +77,7 @@ En cada flujo compruebe permiso de cámara, rostro único, encuadre, vida, retor
 | Red del alumno interrumpida | Se registran desconexión y reconexión; el intento continúa | Pendiente |
 | `localStorage` bloqueado | La cola continúa en memoria mientras la página permanezca abierta | Cubierto automáticamente |
 | S3 temporalmente inaccesible | La API realiza tres intentos acotados y no crea metadatos huérfanos | Cubierto automáticamente |
-| PostgreSQL inaccesible | `/health` devuelve `503` sin revelar credenciales | Cubierto automáticamente |
+| MariaDB inaccesible | `/health` devuelve `503` sin revelar credenciales | Cubierto automáticamente |
 | Moodle inaccesible al cierre | El estado local queda `close_failed`; la entrega no cambia | Pendiente Moodle |
 
 ## Aprobación

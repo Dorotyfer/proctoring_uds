@@ -1,19 +1,23 @@
 import crypto from 'node:crypto';
-import pg from 'pg';
+
+import { createMysqlPool } from '../db/mysql-pool.js';
+import { toIsoDate } from '../db/mysql-row.js';
 
 export function createAlertRepository(databaseUrl) {
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const pool = createMysqlPool(databaseUrl);
 
   return {
     async createForEvent(event, severity) {
-      const result = await pool.query(`
+      await pool.execute(`
         INSERT INTO proctoring_alerts (id, session_id, event_id, type, severity)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (event_id) DO UPDATE SET event_id = EXCLUDED.event_id
-        RETURNING id, session_id, event_id, type, severity, status, created_at, reviewed_at
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)
       `, [crypto.randomUUID(), event.sessionId, event.id, event.type, severity]);
-
-      return mapAlert(result.rows[0]);
+      const [rows] = await pool.execute(`
+        SELECT id, session_id, event_id, type, severity, status, created_at, reviewed_at
+        FROM proctoring_alerts WHERE event_id = ?
+      `, [event.id]);
+      return mapAlert(rows[0]);
     },
     async close() {
       await pool.end();
@@ -29,7 +33,7 @@ function mapAlert(row) {
     type: row.type,
     severity: row.severity,
     status: row.status,
-    createdAt: row.created_at.toISOString(),
-    reviewedAt: row.reviewed_at?.toISOString() ?? null
+    createdAt: toIsoDate(row.created_at),
+    reviewedAt: row.reviewed_at ? toIsoDate(row.reviewed_at) : null
   };
 }

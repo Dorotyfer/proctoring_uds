@@ -1,59 +1,62 @@
 import crypto from 'node:crypto';
-import pg from 'pg';
+
+import { createMysqlPool } from '../db/mysql-pool.js';
+import { toIsoDate } from '../db/mysql-row.js';
 
 export function createEvidenceRepository(databaseUrl) {
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const pool = createMysqlPool(databaseUrl);
 
   return {
     async create(input) {
-      const result = await pool.query(`
+      const id = crypto.randomUUID();
+      await pool.execute(`
         INSERT INTO proctoring_evidence (
           id, session_id, kind, object_key, content_type, byte_size, sha256,
           encryption_iv, encryption_tag, expires_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING *
-      `, [
-        crypto.randomUUID(), input.sessionId, input.kind, input.objectKey,
-        input.contentType, input.byteSize, input.sha256, input.encryptionIv,
-        input.encryptionTag, input.expiresAt
-      ]);
-      return mapEvidence(result.rows[0]);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, input.sessionId, input.kind, input.objectKey, input.contentType,
+        input.byteSize, input.sha256, input.encryptionIv, input.encryptionTag, input.expiresAt]);
+      return findEvidenceById(pool, id);
     },
     async findById(id) {
-      const result = await pool.query(`
+      const [rows] = await pool.execute(`
         SELECT evidence.*, sessions.moodle_course_id
         FROM proctoring_evidence evidence
         JOIN proctoring_sessions sessions ON sessions.id = evidence.session_id
-        WHERE evidence.id = $1 AND evidence.deleted_at IS NULL
+        WHERE evidence.id = ? AND evidence.deleted_at IS NULL
       `, [id]);
-      return result.rowCount === 0 ? null : mapEvidence(result.rows[0]);
+      return rows.length === 0 ? null : mapEvidence(rows[0]);
     },
     async audit(input) {
-      await pool.query(`
+      await pool.execute(`
         INSERT INTO proctoring_evidence_audit (
           evidence_id, actor_moodle_user_id, action, ip_address, user_agent
-        ) VALUES ($1, $2, $3, $4, $5)
+        ) VALUES (?, ?, ?, ?, ?)
       `, [input.evidenceId, input.actorId, input.action, input.ipAddress, input.userAgent]);
     },
     async findExpired(limit) {
-      const result = await pool.query(`
+      const [rows] = await pool.execute(`
         SELECT * FROM proctoring_evidence
-        WHERE expires_at <= NOW() AND deleted_at IS NULL
-        ORDER BY expires_at
-        LIMIT $1
+        WHERE expires_at <= UTC_TIMESTAMP(3) AND deleted_at IS NULL
+        ORDER BY expires_at LIMIT ?
       `, [limit]);
-      return result.rows.map(mapEvidence);
+      return rows.map(mapEvidence);
     },
     async markDeleted(id) {
-      await pool.query(`
-        UPDATE proctoring_evidence SET deleted_at = NOW()
-        WHERE id = $1 AND deleted_at IS NULL
+      await pool.execute(`
+        UPDATE proctoring_evidence SET deleted_at = UTC_TIMESTAMP(3)
+        WHERE id = ? AND deleted_at IS NULL
       `, [id]);
     },
     async close() {
       await pool.end();
     }
   };
+}
+
+async function findEvidenceById(pool, id) {
+  const [rows] = await pool.execute('SELECT * FROM proctoring_evidence WHERE id = ?', [id]);
+  return mapEvidence(rows[0]);
 }
 
 function mapEvidence(row) {
@@ -68,8 +71,8 @@ function mapEvidence(row) {
     sha256: row.sha256,
     encryptionIv: row.encryption_iv,
     encryptionTag: row.encryption_tag,
-    createdAt: row.created_at.toISOString(),
-    expiresAt: row.expires_at.toISOString(),
-    deletedAt: row.deleted_at?.toISOString() ?? null
+    createdAt: toIsoDate(row.created_at),
+    expiresAt: toIsoDate(row.expires_at),
+    deletedAt: row.deleted_at ? toIsoDate(row.deleted_at) : null
   };
 }

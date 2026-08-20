@@ -50,9 +50,11 @@ export function loadConfig(environment = process.env) {
     throw new Error('PROCTORING_PORT must be a valid TCP port');
   }
 
+  const { databaseUrl } = loadDatabaseConfig(environment);
+
   return {
     apiOrigin,
-    databaseUrl: environment.DATABASE_URL,
+    databaseUrl,
     evidenceEncryptionKey,
     evidenceRetentionDays,
     host: environment.PROCTORING_HOST ?? '127.0.0.1',
@@ -75,6 +77,16 @@ export function loadConfig(environment = process.env) {
 export function loadDatabaseConfig(environment = process.env) {
   if (!environment.DATABASE_URL) {
     throw new Error('Missing required environment variable: DATABASE_URL');
+  }
+
+  let databaseUrl;
+  try {
+    databaseUrl = new URL(environment.DATABASE_URL);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid MySQL/MariaDB URL');
+  }
+  if (databaseUrl.protocol !== 'mysql:') {
+    throw new Error('DATABASE_URL must use the MySQL/MariaDB mysql: protocol');
   }
 
   return { databaseUrl: environment.DATABASE_URL };

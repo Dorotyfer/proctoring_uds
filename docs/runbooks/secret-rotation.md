@@ -6,7 +6,7 @@
 - `PANEL_SSO_SECRET`: Moodle y API.
 - `JWT_SECRET`: solo API; invalida tokens de navegador y panel.
 - `EVIDENCE_ENCRYPTION_KEY`: solo API; necesaria para leer evidencia vigente.
-- Credenciales S3 y `DATABASE_URL`: solo servicio independiente.
+- Credenciales S3 y `DATABASE_URL` de MariaDB/MySQL: solo servicio independiente.
 
 ## Procedimiento
 

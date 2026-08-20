@@ -1,42 +1,49 @@
-CREATE TABLE proctoring_evidence (
-  id UUID PRIMARY KEY,
-  session_id UUID NOT NULL REFERENCES proctoring_sessions(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('identity', 'interval', 'alert')),
-  object_key TEXT NOT NULL UNIQUE,
-  content_type TEXT NOT NULL,
-  byte_size INTEGER NOT NULL CHECK (byte_size > 0),
+CREATE TABLE IF NOT EXISTS proctoring_evidence (
+  id CHAR(36) PRIMARY KEY,
+  session_id CHAR(36) NOT NULL,
+  kind VARCHAR(20) NOT NULL,
+  object_key VARCHAR(768) NOT NULL UNIQUE,
+  content_type VARCHAR(255) NOT NULL,
+  byte_size INT NOT NULL,
   sha256 CHAR(64) NOT NULL,
-  encryption_iv BYTEA NOT NULL,
-  encryption_tag BYTEA NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL,
-  deleted_at TIMESTAMPTZ
-);
+  encryption_iv BLOB NOT NULL,
+  encryption_tag BLOB NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  expires_at DATETIME(3) NOT NULL,
+  deleted_at DATETIME(3) NULL,
+  CONSTRAINT proctoring_evidence_session_fk
+    FOREIGN KEY (session_id) REFERENCES proctoring_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT proctoring_evidence_kind_check CHECK (kind IN ('identity', 'interval', 'alert')),
+  CONSTRAINT proctoring_evidence_size_check CHECK (byte_size > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX proctoring_evidence_session_created_idx
-  ON proctoring_evidence (session_id, created_at)
-  WHERE deleted_at IS NULL;
-
-CREATE INDEX proctoring_evidence_retention_idx
-  ON proctoring_evidence (expires_at)
-  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS proctoring_evidence_session_created_idx
+  ON proctoring_evidence (deleted_at, session_id, created_at);
+CREATE INDEX IF NOT EXISTS proctoring_evidence_retention_idx
+  ON proctoring_evidence (deleted_at, expires_at);
 
 ALTER TABLE proctoring_sessions
-  ADD COLUMN reference_evidence_id UUID REFERENCES proctoring_evidence(id);
+  ADD COLUMN IF NOT EXISTS reference_evidence_id CHAR(36) NULL,
+  ADD CONSTRAINT IF NOT EXISTS proctoring_sessions_reference_evidence_fk
+    FOREIGN KEY (reference_evidence_id) REFERENCES proctoring_evidence(id);
 
 ALTER TABLE proctoring_alerts
-  ADD COLUMN reviewed_by TEXT,
-  ADD COLUMN review_note TEXT;
+  ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS review_note TEXT NULL;
 
-CREATE TABLE proctoring_evidence_audit (
-  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  evidence_id UUID NOT NULL REFERENCES proctoring_evidence(id),
-  actor_moodle_user_id TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('view', 'download', 'delete', 'retention_delete')),
-  ip_address INET,
-  user_agent TEXT,
-  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+CREATE TABLE IF NOT EXISTS proctoring_evidence_audit (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  evidence_id CHAR(36) NOT NULL,
+  actor_moodle_user_id VARCHAR(255) NOT NULL,
+  action VARCHAR(32) NOT NULL,
+  ip_address VARCHAR(45) NULL,
+  user_agent TEXT NULL,
+  occurred_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT proctoring_evidence_audit_evidence_fk
+    FOREIGN KEY (evidence_id) REFERENCES proctoring_evidence(id),
+  CONSTRAINT proctoring_evidence_audit_action_check
+    CHECK (action IN ('view', 'download', 'delete', 'retention_delete'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX proctoring_evidence_audit_evidence_time_idx
-  ON proctoring_evidence_audit (evidence_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS proctoring_evidence_audit_evidence_time_idx
+  ON proctoring_evidence_audit (evidence_id, occurred_at);

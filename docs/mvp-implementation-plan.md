@@ -2,21 +2,21 @@
 
 ## Estado de ejecución
 
-- Fase 0: implementada; falta validación contra la instancia PostgreSQL de destino.
+- Fase 0: implementada; falta validación contra la instancia MariaDB de destino.
 - Fase 1: implementada; falta ejecutar PHPUnit e instalación en un Moodle 4.3.3 real.
 - Fase 2: implementada para sesiones, tokens, estados, eventos y alertas; la auditoría administrativa se completa junto con el panel.
 - Fase 3: implementada; falta validación con cámara real en los dispositivos del piloto.
 - Fase 4: implementada; falta prueba integrada dentro de una instalación Moodle real.
 - Fase 5: implementada; falta validar el proveedor S3 y la política institucional de retención.
 - Fase 6: implementada; falta prueba integrada con roles y cursos de un Moodle real.
-- Fase 7: automatización y runbooks implementados; falta ejecutar la aceptación institucional en Moodle, SEB, dispositivos reales, PostgreSQL y S3 de destino.
+- Fase 7: automatización y runbooks implementados; falta ejecutar la aceptación institucional en Moodle, SEB, dispositivos reales, MariaDB y S3 de destino.
 
 ## Principios no negociables
 
 - Moodle conserva usuarios, cursos, cuestionarios, intentos y calificaciones.
 - La plataforma de proctoring usa su propia base de datos y nunca lee tablas de Moodle.
 - Moodle se comunica con la API por HTTPS y una clave servidor-a-servidor.
-- No se usa Docker; PostgreSQL, almacenamiento de objetos y la API se despliegan como servicios independientes.
+- No se usa Docker; MariaDB, almacenamiento de objetos y la API se despliegan como servicios independientes.
 - Las alertas se revisan por personas y nunca modifican calificaciones.
 - No se graba vídeo continuo ni se infieren emociones.
 
@@ -24,9 +24,9 @@
 
 **Objetivo:** dejar la API independiente preparada para un entorno real.
 
-1. Definir la instancia PostgreSQL externa y ejecutar la migración de sesiones.
+1. Definir la instancia MariaDB externa y ejecutar la migración de sesiones.
 2. Configurar secretos mediante variables de entorno: `DATABASE_URL`, `MOODLE_INTEGRATION_KEY`, `JWT_SECRET` y URLs públicas.
-3. Añadir migrador versionado y endpoint de estado que compruebe conectividad con PostgreSQL.
+3. Añadir migrador versionado y endpoint de estado que compruebe conectividad con MariaDB.
 4. Configurar HTTPS, registros estructurados y rotación de secretos.
 5. Documentar instalación de la API y del plugin Moodle.
 
@@ -94,7 +94,7 @@
 
 **Objetivo:** conservar solo evidencia necesaria y protegerla.
 
-1. Seleccionar un almacenamiento de objetos compatible con S3, separado de Moodle y PostgreSQL.
+1. Seleccionar un almacenamiento de objetos compatible con S3, separado de Moodle y MariaDB.
 2. Cifrar evidencia en tránsito y en reposo; cifrar descriptores biométricos con claves gestionadas fuera del código.
 3. Guardar capturas de identidad, intervalos configurables y alertas; no vídeo continuo.
 4. Implementar URLs temporales para lectura, emitidas solo tras autorización.
@@ -123,7 +123,7 @@
 **Objetivo:** validar el flujo completo antes de uso institucional.
 
 1. Añadir prueba vertical: Moodle crea sesión, estudiante se prepara, reporta evento, se genera alerta y docente autorizado la revisa.
-2. Crear datos deterministas de prueba y guías de instalación para Moodle, API, PostgreSQL y almacenamiento.
+2. Crear datos deterministas de prueba y guías de instalación para Moodle, API, MariaDB y almacenamiento.
 3. Ejecutar PHPUnit en Moodle, tests de API y pruebas de navegador en móvil y escritorio.
 4. Verificar flujo con SEB nativo de Moodle y flujo móvil sin SEB.
 5. Realizar prueba de carga de 1.000 sesiones activas, midiendo latencia de API, cola, reintentos y consumo de red.

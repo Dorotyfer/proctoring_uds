@@ -10,7 +10,7 @@
 
 1. Solicite hora, intento Moodle, dispositivo, navegador y `X-Correlation-ID`; no solicite imágenes por correo.
 2. Consulte `/health` y los registros estructurados de API por correlación.
-3. Compruebe conectividad PostgreSQL y S3 desde la identidad del servicio.
+3. Compruebe conectividad MariaDB/MySQL y S3 desde la identidad del servicio.
 4. Confirme la configuración del cuestionario, su modalidad y la regla nativa SEB.
 5. Revise el estado remoto sin modificar el intento ni la calificación.
 

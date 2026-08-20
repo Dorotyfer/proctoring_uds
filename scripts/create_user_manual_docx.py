@@ -212,7 +212,7 @@ def add_title_page(document):
 
   p = document.add_paragraph()
   p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-  run = p.add_run("Instalación de PostgreSQL, API independiente, panel de revisión, evidencia y operación académica")
+  run = p.add_run("Instalación de MariaDB, API independiente, panel de revisión, evidencia y operación académica")
   set_run_font(run, size=11, italic=True, color=MUTED)
 
   for _ in range(8):
@@ -308,7 +308,7 @@ def add_toc(document):
     "1. Introducción y alcance",
     "2. Arquitectura y componentes",
     "3. Requisitos previos",
-    "4. Instalación de PostgreSQL",
+    "4. Instalación de MariaDB",
     "5. Preparación del almacenamiento de evidencia",
     "6. Generación y administración de secretos",
     "7. Instalación y configuración de la API",
@@ -346,17 +346,17 @@ def build_document():
     ("Versión", "1.0"),
     ("Audiencia", "Administradores de servidor, administradores Moodle, docentes, revisores y soporte"),
     ("Alcance", "Servidor de pruebas, validación funcional y preparación del piloto"),
-    ("Base externa", "PostgreSQL exclusiva para proctoring"),
+    ("Base externa", "MariaDB exclusiva para proctoring"),
   ], [2700, 6660])
   add_callout(document, "Principio de separación", "Moodle conserva usuarios, cursos, cuestionarios, intentos y calificaciones. La plataforma de proctoring conserva sus propias sesiones, eventos, alertas y evidencia. La API no consulta tablas de Moodle.")
   add_toc(document)
 
   document.add_heading("1. Introducción y alcance", level=1)
-  add_paragraph(document, "Este manual explica cómo implementar y operar el sistema de Proctoring UDS integrado con Moodle. Incluye la instalación de la base PostgreSQL independiente, la API, la aplicación web, el panel de revisión, los plugins Moodle y el almacenamiento de evidencia.")
+  add_paragraph(document, "Este manual explica cómo implementar y operar el sistema de Proctoring UDS integrado con Moodle. Incluye la instalación de la base MariaDB independiente, la API, la aplicación web, el panel de revisión, los plugins Moodle y el almacenamiento de evidencia.")
   add_paragraph(document, "El sistema acompaña exámenes protegidos mediante verificación previa de cámara, detección local de rostro, prueba de vida, monitoreo de incidencias y revisión humana posterior. Las alertas nunca modifican automáticamente una calificación.")
   document.add_heading("1.1 Usuarios del manual", level=2)
   add_table(document, ["Rol", "Responsabilidad"], [
-    ("Administrador de servidor", "Instala PostgreSQL, API, web, certificados, servicios y almacenamiento."),
+    ("Administrador de servidor", "Instala MariaDB, API, web, certificados, servicios y almacenamiento."),
     ("Administrador Moodle", "Instala plugins, configura URLs, secretos, capacidades y cuestionarios."),
     ("Docente", "Configura el cuestionario y consulta sesiones de sus cursos."),
     ("Revisor", "Analiza alertas, cronología y evidencia autorizada; registra una decisión humana."),
@@ -379,7 +379,7 @@ Navegador del estudiante
   |-- Aplicación web de preparación y monitor
 
 Moodle -- HTTPS + clave de integración --> API Proctoring
-                                              |-- PostgreSQL propia
+                                              |-- MariaDB propia
                                               |-- almacenamiento S3 privado
                                               `-- registros y auditoría
 
@@ -390,7 +390,7 @@ Moodle -- token SSO breve --> API --> cookie segura --> Panel de revisión
     ("Moodle", "Gestiona identidad, cursos, intentos y notas.", "80/443 mediante servidor web"),
     ("API", "Sesiones, tokens, eventos, alertas, evidencia y autorización.", "3001"),
     ("Aplicación web", "Preparación del estudiante, monitor y panel.", "3000"),
-    ("PostgreSQL", "Persistencia exclusiva de proctoring.", "5432 privado"),
+    ("MariaDB", "Persistencia exclusiva de proctoring.", "3306 privado"),
     ("S3 compatible", "Objetos de evidencia cifrados.", "HTTPS privado"),
   ], [2300, 4760, 2300])
   document.add_heading("2.2 Dominios recomendados", level=2)
@@ -406,7 +406,7 @@ Moodle -- token SSO breve --> API --> cookie segura --> Panel de revisión
   add_bullets(document, [
     "Moodle 4.3.3 o superior y PHP compatible con la versión instalada.",
     "Node.js 22 o superior y pnpm 11 o superior.",
-    "PostgreSQL 15 o superior.",
+    "MariaDB 10.11.14 o superior.",
     "Nginx o Apache para publicación HTTPS.",
     "Git para descargar y actualizar el código.",
     "Almacenamiento de objetos compatible con S3 y bucket privado.",
@@ -416,7 +416,7 @@ Moodle -- token SSO breve --> API --> cookie segura --> Panel de revisión
     ("CPU", "4 núcleos"),
     ("Memoria", "8 GB"),
     ("Disco de aplicaciones y logs", "40 GB"),
-    ("Base PostgreSQL", "20 GB iniciales con monitoreo de crecimiento"),
+    ("Base MariaDB", "20 GB iniciales con monitoreo de crecimiento"),
     ("Red", "HTTPS estable entre Moodle, API, panel y clientes"),
   ], [3400, 5960])
   document.add_heading("3.3 Datos que debe definir la institución", level=2)
@@ -426,34 +426,36 @@ Moodle -- token SSO breve --> API --> cookie segura --> Panel de revisión
     "Procedimiento de revisión y tratamiento de falsos positivos.",
     "Canal de soporte e incidentes.",
     "Dominios públicos y certificados.",
-    "Responsables de PostgreSQL, almacenamiento y Moodle.",
+    "Responsables de MariaDB, almacenamiento y Moodle.",
   ])
 
-  document.add_heading("4. Instalación de PostgreSQL", level=1)
+  document.add_heading("4. Instalación de MariaDB", level=1)
   document.add_heading("4.1 Instalar el servicio", level=2)
-  add_paragraph(document, "Instale PostgreSQL mediante el gestor de paquetes de su sistema operativo. El servicio puede ejecutarse en el mismo servidor de pruebas que Moodle, siempre que utilice una base, un usuario y permisos separados.")
+  add_paragraph(document, "Instale MariaDB mediante el gestor de paquetes de su sistema operativo. El servicio puede ejecutarse en el mismo servidor de pruebas que Moodle, siempre que utilice una base, un usuario y permisos separados.")
   add_code(document, """
 sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl enable --now postgresql
-sudo systemctl status postgresql
+sudo apt install mariadb-server mariadb-client
+sudo systemctl enable --now mariadb
+sudo systemctl status mariadb
 """)
   document.add_heading("4.2 Crear usuario y base", level=2)
   add_code(document, """
-sudo -u postgres psql
+sudo mariadb
 
-CREATE USER proctoring_app WITH PASSWORD 'CONTRASENA_LARGA_Y_ALEATORIA';
-CREATE DATABASE proctoring OWNER proctoring_app;
-REVOKE ALL ON DATABASE proctoring FROM PUBLIC;
-\\q
+CREATE DATABASE proctoring CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'proctoring_app'@'127.0.0.1' IDENTIFIED BY 'CONTRASENA_LARGA_Y_ALEATORIA';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, DROP
+  ON proctoring.* TO 'proctoring_app'@'127.0.0.1';
+FLUSH PRIVILEGES;
+exit
 """)
   add_callout(document, "Separación obligatoria", "No utilice el usuario, la contraseña ni la base de datos de Moodle. No conceda al usuario proctoring_app acceso a la base Moodle.", "danger")
   document.add_heading("4.3 Verificar conexión", level=2)
   add_code(document, """
-psql "postgresql://proctoring_app:CONTRASENA@127.0.0.1:5432/proctoring" -c "SELECT 1;"
+mariadb --host=127.0.0.1 --user=proctoring_app --password proctoring -e "SELECT 1;"
 """)
   document.add_heading("4.4 Acceso de red", level=2)
-  add_paragraph(document, "Si la API y PostgreSQL están en el mismo servidor, escuche solo en 127.0.0.1. Si están separados, permita exclusivamente la IP privada de la API, use TLS y bloquee el puerto 5432 desde Internet.")
+  add_paragraph(document, "Si la API y MariaDB están en el mismo servidor, escuche solo en 127.0.0.1. Si están separados, permita exclusivamente la IP privada de la API, use TLS y bloquee el puerto 3306 desde Internet.")
 
   document.add_heading("5. Preparación del almacenamiento de evidencia", level=1)
   add_steps(document, [
@@ -509,7 +511,7 @@ sudo chmod 600 /etc/proctoring/api.env
   add_code(document, """
 PROCTORING_HOST=127.0.0.1
 PROCTORING_PORT=3001
-DATABASE_URL=postgresql://proctoring_app:CAMBIAR@127.0.0.1:5432/proctoring
+DATABASE_URL=mysql://proctoring_app:CAMBIAR@127.0.0.1:3306/proctoring
 MOODLE_INTEGRATION_KEY=CAMBIAR
 JWT_SECRET=CAMBIAR
 PANEL_SSO_SECRET=CAMBIAR
@@ -531,14 +533,14 @@ cd /opt/proctoring-uds
 set -a
 . /etc/proctoring/api.env
 set +a
-pnpm api:migrate
+pnpm --filter @proctoring/api migrate
 """)
   add_paragraph(document, "Confirme que se aplicaron las migraciones 001, 002, 003 y 004. No edite manualmente las tablas creadas.")
   document.add_heading("7.4 Crear el servicio", level=2)
   add_code(document, """
 [Unit]
 Description=Proctoring UDS API
-After=network.target postgresql.service
+After=network.target mariadb.service
 
 [Service]
 Type=simple
@@ -560,7 +562,7 @@ sudo systemctl enable --now proctoring-api
 sudo systemctl status proctoring-api
 curl http://127.0.0.1:3001/health
 """)
-  add_paragraph(document, "La respuesta normal es {\"status\":\"ok\",\"database\":\"available\"}. Un código 503 indica que la API no puede consultar PostgreSQL.")
+  add_paragraph(document, "La respuesta normal es {\"status\":\"ok\",\"database\":\"available\"}. Un código 503 indica que la API no puede consultar MariaDB.")
 
   document.add_heading("8. Instalación de la aplicación web y panel", level=1)
   document.add_heading("8.1 Configuración", level=2)
@@ -777,24 +779,24 @@ pnpm api:evidence:purge
   add_bullets(document, [
     "Estado de proctoring-api y proctoring-web.",
     "Respuesta de /health.",
-    "Espacio y conexiones de PostgreSQL.",
+    "Espacio y conexiones de MariaDB.",
     "Errores y capacidad del bucket S3.",
     "Ejecución de la tarea de retención.",
     "Certificados próximos a vencer.",
   ])
-  document.add_heading("16.2 Copia de PostgreSQL", level=2)
+  document.add_heading("16.2 Copia de MariaDB", level=2)
   add_code(document, """
-pg_dump --format=custom \
-  "postgresql://proctoring_app:CONTRASENA@127.0.0.1:5432/proctoring" \
+mariadb-dump --host=127.0.0.1 --user=proctoring_app --password \
+  proctoring \
   > proctoring_$(date +%Y%m%d).dump
 """)
-  add_paragraph(document, "Proteja y cifre las copias. La copia de PostgreSQL no contiene los objetos del bucket; el plan de recuperación debe considerar ambos componentes y conservar vencimientos.")
+  add_paragraph(document, "Proteja y cifre las copias. La copia de MariaDB no contiene los objetos del bucket; el plan de recuperación debe considerar ambos componentes y conservar vencimientos.")
   document.add_heading("16.3 Actualización", level=2)
   add_steps(document, [
-    "Realizar copia de PostgreSQL y registrar la versión actual.",
+    "Realizar copia de MariaDB y registrar la versión actual.",
     "Detener nuevas evaluaciones durante la ventana.",
     "Descargar la versión aprobada del repositorio.",
-    "Ejecutar pnpm install --frozen-lockfile y pnpm api:migrate.",
+    "Ejecutar pnpm install --frozen-lockfile y pnpm --filter @proctoring/api migrate.",
     "Compilar la web con pnpm web:build.",
     "Actualizar plugins Moodle y ejecutar admin/cli/upgrade.php.",
     "Reiniciar servicios, verificar /health y ejecutar una sesión sintética.",
@@ -839,12 +841,12 @@ pnpm pilot:load
     ("Latencia p95", "Menor de 1.000 ms"),
     ("Operaciones reintentadas", "Menos de 1%"),
     ("Acceso cruzado", "0 casos"),
-    ("Errores PostgreSQL/S3", "0 durante la ventana"),
+    ("Errores MariaDB/S3", "0 durante la ventana"),
   ], [3900, 5460])
 
   document.add_heading("18. Solución de problemas", level=1)
   add_table(document, ["Síntoma", "Comprobación", "Solución"], [
-    ("/health devuelve 503", "Estado y DATABASE_URL de PostgreSQL.", "Restablecer conexión; no mostrar credenciales en tickets."),
+    ("/health devuelve 503", "Estado y DATABASE_URL de MariaDB.", "Restablecer conexión; no mostrar credenciales en tickets."),
     ("Moodle no crea sesión", "URL API, clave compartida, TLS y conectividad saliente.", "Corregir configuración y probar curl desde el servidor Moodle."),
     ("El panel muestra acceso vencido", "Hora del servidor y secreto SSO.", "Sincronizar reloj y volver a abrir desde Moodle."),
     ("El docente no ve sesiones", "Capacidad y matrícula del curso.", "Asignar rol correcto y emitir un acceso nuevo."),
@@ -857,7 +859,7 @@ pnpm pilot:load
   add_code(document, """
 sudo journalctl -u proctoring-api -n 200 --no-pager
 sudo journalctl -u proctoring-web -n 200 --no-pager
-sudo systemctl status postgresql
+sudo systemctl status mariadb
 curl -i https://api-proctoring-pruebas.institucion.edu/health
 """)
   add_callout(document, "Soporte seguro", "Solicite intento, hora, dispositivo y X-Correlation-ID. No solicite evidencia, claves o contraseñas por correo o chat.", "warning")
@@ -865,7 +867,7 @@ curl -i https://api-proctoring-pruebas.institucion.edu/health
   document.add_heading("19. Anexos de referencia", level=1)
   document.add_heading("19.1 Lista previa a la puesta en marcha", level=2)
   checklist = [
-    "PostgreSQL separada y usuario de mínimo privilegio.",
+    "MariaDB separada y usuario de mínimo privilegio.",
     "Migraciones 001-004 aplicadas.",
     "Bucket S3 privado y credencial exclusiva.",
     "Dominios y certificados válidos.",
@@ -888,12 +890,12 @@ curl -i https://api-proctoring-pruebas.institucion.edu/health
     set_run_font(p.add_run(item))
 
   document.add_heading("19.2 Prueba híbrida con Moodle remoto", level=2)
-  add_paragraph(document, "Para una validación temporal, los plugins pueden instalarse en un Moodle remoto mientras API, web, PostgreSQL y almacenamiento se ejecutan en una computadora de desarrollo. La API y la web deben exponerse mediante URLs HTTPS alcanzables; PostgreSQL y S3 permanecen privados.")
+  add_paragraph(document, "Para una validación temporal, los plugins pueden instalarse en un Moodle remoto mientras API, web, MariaDB y almacenamiento se ejecutan en una computadora de desarrollo. La API y la web deben exponerse mediante URLs HTTPS alcanzables; MariaDB y S3 permanecen privados.")
   add_callout(document, "Limitación", "Esta modalidad depende de que la computadora y los túneles estén activos. Es apropiada para validación técnica, no para exámenes reales o una prueba de carga representativa.", "warning")
 
   document.add_heading("19.3 Comandos de referencia", level=2)
   add_table(document, ["Objetivo", "Comando"], [
-    ("Migrar base", "pnpm api:migrate"),
+    ("Migrar base", "pnpm --filter @proctoring/api migrate"),
     ("Iniciar API en desarrollo", "pnpm api:dev"),
     ("Iniciar web en desarrollo", "pnpm web:dev"),
     ("Ejecutar pruebas", "pnpm test"),
@@ -904,12 +906,12 @@ curl -i https://api-proctoring-pruebas.institucion.edu/health
   ], [3300, 6060])
 
   document.add_heading("19.4 Criterio final de aceptación", level=2)
-  add_paragraph(document, "El sistema está preparado para un piloto únicamente cuando Moodle, API, PostgreSQL, almacenamiento, panel y dispositivos han sido validados en el entorno de destino; no existe acceso entre cursos; cada acceso a evidencia queda auditado; las alertas son revisadas por personas; y ninguna función modifica automáticamente una calificación.")
+  add_paragraph(document, "El sistema está preparado para un piloto únicamente cuando Moodle, API, MariaDB, almacenamiento, panel y dispositivos han sido validados en el entorno de destino; no existe acceso entre cursos; cada acceso a evidencia queda auditado; las alertas son revisadas por personas; y ninguna función modifica automáticamente una calificación.")
 
   document.core_properties.title = "Manual de implementación y uso - Proctoring UDS"
-  document.core_properties.subject = "Implementación de PostgreSQL, API, panel, Moodle y operación de proctoring"
+  document.core_properties.subject = "Implementación de MariaDB, API, panel, Moodle y operación de proctoring"
   document.core_properties.author = "Proctoring UDS"
-  document.core_properties.keywords = "Moodle, proctoring, PostgreSQL, implementación, manual de usuario"
+  document.core_properties.keywords = "Moodle, proctoring, MariaDB, implementación, manual de usuario"
   OUTPUT.parent.mkdir(parents=True, exist_ok=True)
   document.save(OUTPUT)
   return OUTPUT

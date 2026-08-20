@@ -1,24 +1,19 @@
-CREATE TABLE proctoring_events (
-  id UUID PRIMARY KEY,
-  session_id UUID NOT NULL REFERENCES proctoring_sessions(id) ON DELETE CASCADE,
-  client_event_id UUID NOT NULL,
-  type TEXT NOT NULL CHECK (type IN (
-    'camera_interrupted',
-    'face_absent',
-    'multiple_faces',
-    'face_out_of_frame',
-    'identity_check_failed',
-    'liveness_check_failed',
-    'page_visibility_changed',
-    'network_disconnected',
-    'network_reconnected',
-    'seb_event'
-  )),
-  occurred_at TIMESTAMPTZ NOT NULL,
-  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (session_id, client_event_id)
-);
+CREATE TABLE IF NOT EXISTS proctoring_events (
+  id CHAR(36) PRIMARY KEY,
+  session_id CHAR(36) NOT NULL,
+  client_event_id CHAR(36) NOT NULL,
+  type VARCHAR(64) NOT NULL,
+  occurred_at DATETIME(3) NOT NULL,
+  metadata JSON NOT NULL,
+  received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY proctoring_events_session_client_event_unique (session_id, client_event_id),
+  CONSTRAINT proctoring_events_session_fk
+    FOREIGN KEY (session_id) REFERENCES proctoring_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT proctoring_events_type_check CHECK (type IN (
+    'camera_interrupted', 'face_absent', 'multiple_faces', 'face_out_of_frame',
+    'identity_check_failed', 'liveness_check_failed', 'page_visibility_changed',
+    'network_disconnected', 'network_reconnected', 'seb_event'
+  ))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX proctoring_events_session_time_idx
-  ON proctoring_events (session_id, occurred_at);
+CREATE INDEX IF NOT EXISTS proctoring_events_session_time_idx ON proctoring_events (session_id, occurred_at);

@@ -6,20 +6,20 @@ El servicio de proctoring es independiente de Moodle. No usa Docker ni consulta 
 
 - Node.js 22 o superior
 - pnpm 11 o superior
-- Una instancia PostgreSQL accesible mediante `DATABASE_URL`
+- Una instancia MariaDB 10.11.14 o superior accesible mediante `DATABASE_URL`
 - Un almacenamiento de objetos compatible con S3 accesible por HTTPS
 - Moodle 4.3.3 o superior y PHP 8.1 o superior para el plugin
 
 ## API independiente
 
-1. Copie `.env.example` a `.env` y configure PostgreSQL, los secretos, las URLs públicas y las credenciales S3.
+1. Copie `.env.example` a `.env` y configure MariaDB, los secretos, las URLs públicas y las credenciales S3. Use `DATABASE_URL=mysql://proctoring:contraseña@127.0.0.1:3306/proctoring`.
 2. Instale dependencias con `pnpm install`.
 3. Ejecute las migraciones versionadas con `pnpm --filter @proctoring/api migrate`.
 4. Inicie la API con `pnpm api:dev`.
 
 La API escucha en `http://127.0.0.1:3001` por defecto. En producción debe exponerse por HTTPS y limitarse a la red desde la que Moodle pueda alcanzarla.
 
-`GET /health` devuelve `200` cuando PostgreSQL está disponible y `503` cuando la API no puede consultar su base de datos. No incluye credenciales ni detalles de conexión.
+`GET /health` devuelve `200` cuando MariaDB está disponible y `503` cuando la API no puede consultar su base de datos. No incluye credenciales ni detalles de conexión.
 
 Genere `EVIDENCE_ENCRYPTION_KEY` con `openssl rand -base64 32`. Configure `WEB_ORIGIN` con el origen exacto de la aplicación web para restringir CORS.
 
