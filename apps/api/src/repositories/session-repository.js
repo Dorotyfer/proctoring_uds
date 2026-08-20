@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import { createMysqlPool } from '../db/mysql-pool.js';
-import { parseJson, toIsoDate } from '../db/mysql-row.js';
+import { parseJson, toIsoDate, toMysqlDate } from '../db/mysql-row.js';
 
 export function createSessionRepository(databaseUrl) {
   const pool = createMysqlPool(databaseUrl);
@@ -20,7 +20,7 @@ export function createSessionRepository(databaseUrl) {
       `, [
         crypto.randomUUID(), input.moodleUserId, input.moodleCourseId,
         input.moodleQuizId, input.moodleAttemptId, input.deviceMode,
-        input.issuedAt, input.expiresAt
+        toMysqlDate(input.issuedAt), toMysqlDate(input.expiresAt)
       ]);
       return findByAttempt(pool, input.moodleAttemptId);
     },

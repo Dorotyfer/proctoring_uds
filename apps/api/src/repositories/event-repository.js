@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import { createMysqlPool } from '../db/mysql-pool.js';
-import { parseJson, toIsoDate } from '../db/mysql-row.js';
+import { parseJson, toIsoDate, toMysqlDate } from '../db/mysql-row.js';
 
 export class EventRateLimitError extends Error {}
 
@@ -42,7 +42,7 @@ export function createEventRepository(databaseUrl) {
           INSERT INTO proctoring_events (
             id, session_id, client_event_id, type, occurred_at, metadata
           ) VALUES (?, ?, ?, ?, ?, ?)
-        `, [id, sessionId, input.clientEventId, input.type, input.occurredAt, JSON.stringify(input.metadata)]);
+        `, [id, sessionId, input.clientEventId, input.type, toMysqlDate(input.occurredAt), JSON.stringify(input.metadata)]);
         const [rows] = await connection.execute(eventSelect('id = ?'), [id]);
         await connection.commit();
         transactionOpen = false;

@@ -12,7 +12,7 @@ El servicio de proctoring es independiente de Moodle. No usa Docker ni consulta 
 
 ## API independiente
 
-1. Copie `.env.example` a `.env` y configure MariaDB, los secretos, las URLs públicas y las credenciales S3. Use `DATABASE_URL=mysql://proctoring:contraseña@127.0.0.1:3306/proctoring`.
+1. Copie `.env.example` a `.env` y configure MariaDB, los secretos, las URLs públicas y las credenciales S3. Use `DATABASE_URL=mysql://proctoring:contraseña@127.0.0.1:3306/proctoring`. Mantenga `S3_SERVER_SIDE_ENCRYPTION=AES256`; para una instancia MinIO local sin KMS, use explícitamente `none` solo durante desarrollo.
 2. Instale dependencias con `pnpm install`.
 3. Ejecute las migraciones versionadas con `pnpm --filter @proctoring/api migrate`.
 4. Inicie la API con `pnpm api:dev`.

@@ -68,6 +68,7 @@ export function loadConfig(environment = process.env) {
       endpoint: storageEndpoint,
       forcePathStyle: environment.S3_FORCE_PATH_STYLE === 'true',
       region: environment.S3_REGION,
+      serverSideEncryption: environment.S3_SERVER_SIDE_ENCRYPTION === 'none' ? undefined : 'AES256',
       secretAccessKey: environment.S3_SECRET_ACCESS_KEY
     },
     webOrigin

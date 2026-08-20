@@ -23,7 +23,7 @@ export function createObjectStorageService(config) {
         Key: key,
         Body: body,
         ContentType: contentType,
-        ServerSideEncryption: 'AES256'
+        ...(config.serverSideEncryption ? { ServerSideEncryption: config.serverSideEncryption } : {})
       }));
     },
     async get(key) {

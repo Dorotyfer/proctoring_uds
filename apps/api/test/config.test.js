@@ -23,6 +23,16 @@ test('loads independent service configuration', () => {
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.port, 3001);
   assert.equal(config.evidenceRetentionDays, 30);
+  assert.equal(config.objectStorage.serverSideEncryption, 'AES256');
+});
+
+test('allows local object storage without bucket-side encryption', () => {
+  const config = loadConfig({
+    ...validEnvironment,
+    S3_SERVER_SIDE_ENCRYPTION: 'none'
+  });
+
+  assert.equal(config.objectStorage.serverSideEncryption, undefined);
 });
 
 test('rejects missing or weak service secrets', () => {
