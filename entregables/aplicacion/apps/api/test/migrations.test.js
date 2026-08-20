@@ -18,4 +18,8 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   }
   const evidenceMigration = migrations.find((migration) => migration.file === '004_evidence_panel.sql');
   assert.match(evidenceMigration.sql, /object_key VARCHAR\((?:[1-6]\d\d|7[0-6]\d)\) NOT NULL UNIQUE/);
+  assert.doesNotMatch(evidenceMigration.sql, /ADD CONSTRAINT IF NOT EXISTS/);
+
+  const migrator = await fs.readFile(path.join(migrationsDirectory, '../migrate.js'), 'utf8');
+  assert.match(migrator, /information_schema\.table_constraints/);
 });

@@ -23,9 +23,7 @@ CREATE INDEX IF NOT EXISTS proctoring_evidence_retention_idx
   ON proctoring_evidence (deleted_at, expires_at);
 
 ALTER TABLE proctoring_sessions
-  ADD COLUMN IF NOT EXISTS reference_evidence_id CHAR(36) NULL,
-  ADD CONSTRAINT IF NOT EXISTS proctoring_sessions_reference_evidence_fk
-    FOREIGN KEY (reference_evidence_id) REFERENCES proctoring_evidence(id);
+  ADD COLUMN IF NOT EXISTS reference_evidence_id CHAR(36) NULL;
 
 ALTER TABLE proctoring_alerts
   ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(255) NULL,
