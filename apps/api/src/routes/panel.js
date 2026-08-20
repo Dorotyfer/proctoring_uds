@@ -51,6 +51,8 @@ export async function registerPanelRoutes(app, options) {
     }
     if (!options.authService.canViewEvidence(request.panelUser)) {
       session.evidence = [];
+    } else {
+      session.evidence = session.evidence.filter((item) => item.kind === 'alert');
     }
     return { session };
   });
@@ -83,7 +85,8 @@ export async function registerPanelRoutes(app, options) {
       return reply.code(400).send({ error: 'Invalid evidence identifier' });
     }
     const evidence = await options.evidenceRepository.findById(id.data);
-    if (!evidence || !isCourseAuthorized(evidence.courseId, request.panelUser, options.authService)) {
+    if (!evidence || evidence.kind !== 'alert' ||
+      !isCourseAuthorized(evidence.courseId, request.panelUser, options.authService)) {
       return reply.code(404).send({ error: 'Evidence not found' });
     }
     await options.evidenceRepository.audit(auditInput(request, evidence.id, 'view'));
@@ -103,7 +106,7 @@ export async function registerPanelRoutes(app, options) {
         throw new Error('Invalid evidence access token');
       }
       const evidence = await options.evidenceRepository.findById(id.data);
-      if (!evidence) {
+      if (!evidence || evidence.kind !== 'alert') {
         return reply.code(404).send({ error: 'Evidence not found' });
       }
       const content = await options.evidenceService.readAuthorized(evidence);

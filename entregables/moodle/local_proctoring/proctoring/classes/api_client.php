@@ -49,6 +49,10 @@ class api_client {
     }
 
     private function request(string $path, array $payload): array {
+        global $CFG;
+
+        require_once($CFG->libdir . '/filelib.php');
+
         $apiurl = rtrim((string)get_config('local_proctoring', 'apiurl'), '/');
         $integrationkey = (string)get_config('local_proctoring', 'integrationkey');
 
@@ -64,7 +68,7 @@ class api_client {
             'CURLOPT_HTTPHEADER' => [
                 'Content-Type: application/json',
                 'X-Moodle-Integration-Key: ' . $integrationkey,
-                'X-Correlation-ID: ' . \core\session\manager::get_session_id()
+                'X-Correlation-ID: ' . session_id()
             ]
         ]);
 

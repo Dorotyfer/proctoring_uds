@@ -11,6 +11,7 @@ import { createSessionService } from '../src/services/session-service.js';
 const panelSecret = 'panel-sso-secret-with-at-least-32-characters';
 const courseASessionId = '11111111-1111-4111-8111-111111111111';
 const courseBSessionId = '22222222-2222-4222-8222-222222222222';
+const identityEvidenceId = '77777777-7777-4777-8777-777777777777';
 const evidenceId = '33333333-3333-4333-8333-333333333333';
 const alertId = '44444444-4444-4444-8444-444444444444';
 
@@ -101,8 +102,8 @@ async function createPilotApp(state) {
   const sessionRepository = createSessionRepository(state);
   const evidenceService = {
     async storeIdentity(sessionId) {
-      state.evidence.sessionId = sessionId;
-      return state.evidence;
+      state.identityEvidence.sessionId = sessionId;
+      return state.identityEvidence;
     },
     async readAuthorized() {
       return Buffer.from('pilot-jpeg');
@@ -123,6 +124,7 @@ async function createPilotApp(state) {
         status: 'open',
         type: event.type
       };
+      state.alertEvidence.sessionId = event.sessionId;
       return state.alert;
     }
   });
@@ -164,16 +166,25 @@ function createState() {
   return {
     alert: null,
     auditActions: [],
-    evidence: {
+    alertEvidence: {
       contentType: 'image/jpeg',
       courseId: 'pilot-course-a',
       encryptionIv: Buffer.alloc(12),
       encryptionTag: Buffer.alloc(16),
       id: evidenceId,
+      kind: 'alert',
+      objectKey: 'pilot/alert.enc'
+    },
+    event: null,
+    identityEvidence: {
+      contentType: 'image/jpeg',
+      courseId: 'pilot-course-a',
+      encryptionIv: Buffer.alloc(12),
+      encryptionTag: Buffer.alloc(16),
+      id: identityEvidenceId,
       kind: 'identity',
       objectKey: 'pilot/identity.enc'
     },
-    event: null,
     sessions: new Map()
   };
 }
@@ -204,7 +215,9 @@ function createEvidenceRepository(state) {
       state.auditActions.push(input.action);
     },
     async findById(id) {
-      return id === evidenceId ? state.evidence : null;
+      if (id === evidenceId) return state.alertEvidence;
+      if (id === identityEvidenceId) return state.identityEvidence;
+      return null;
     }
   };
 }
@@ -224,7 +237,7 @@ function createPanelRepository(state) {
         createdAt: session.createdAt,
         deviceMode: session.deviceMode,
         events: state.event?.sessionId === id ? [state.event] : [],
-        evidence: state.evidence.sessionId === id ? [state.evidence] : [],
+        evidence: [state.identityEvidence, state.alertEvidence].filter((item) => item.sessionId === id),
         id,
         quizId: session.moodleQuizId,
         status: session.status

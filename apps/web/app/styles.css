@@ -176,6 +176,14 @@ p {
   padding: 24px;
 }
 
+.panel-login {
+  max-width: 620px;
+}
+
+.panel-login p {
+  margin-bottom: 20px;
+}
+
 .session-row {
   width: 100%;
   display: flex;

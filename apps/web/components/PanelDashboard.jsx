@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function PanelDashboard({ apiUrl }) {
+export default function PanelDashboard({ apiUrl, moodleLoginUrl }) {
   const [sessions, setSessions] = useState([]);
   const [selected, setSelected] = useState(null);
   const [status, setStatus] = useState('loading');
@@ -64,7 +64,19 @@ export default function PanelDashboard({ apiUrl }) {
     return <p className="panel-message">Cargando sesiones…</p>;
   }
   if (status === 'unauthorized') {
-    return <p className="panel-message error-text">La sesión del panel no existe o caducó. Vuelve a ingresar desde Moodle.</p>;
+    return (
+      <section className="panel-message panel-login" aria-labelledby="panel-login-title">
+        <h2 id="panel-login-title">Acceso al panel</h2>
+        {moodleLoginUrl ? (
+          <>
+            <p>Ingresá con tu cuenta docente o de gestor de Moodle para consultar las incidencias autorizadas.</p>
+            <a className="button" href={moodleLoginUrl}>Ingresar con Moodle</a>
+          </>
+        ) : (
+          <p className="error-text">El acceso con Moodle no está configurado.</p>
+        )}
+      </section>
+    );
   }
   if (status === 'error') {
     return <p className="panel-message error-text">No fue posible consultar el servicio.</p>;
@@ -92,6 +104,8 @@ function SessionDetail({ session, onReview, onEvidence }) {
   if (!session) {
     return <section className="panel-detail"><p>Selecciona una sesión para revisar su cronología.</p></section>;
   }
+  const incidentEvidence = session.evidence.filter((item) => item.kind === 'alert');
+
   return (
     <section className="panel-detail">
       <p className="eyebrow">Intento {session.attemptId}</p>
@@ -111,10 +125,10 @@ function SessionDetail({ session, onReview, onEvidence }) {
           )}
         </article>
       ))}
-      <h3>Evidencia autorizada</h3>
-      {session.evidence.length === 0 ? <p>No disponible para este usuario.</p> : session.evidence.map((item) => (
+      <h3>Imágenes de incidencias</h3>
+      {incidentEvidence.length === 0 ? <p>No hay imágenes asociadas a incidencias.</p> : incidentEvidence.map((item) => (
         <button className="text-button evidence-link" key={item.id} onClick={() => onEvidence(item.id)}>
-          Ver {item.kind} · {new Date(item.created_at).toLocaleString()}
+          Ver incidencia · {new Date(item.created_at).toLocaleString()}
         </button>
       ))}
       <h3>Cronología</h3>
