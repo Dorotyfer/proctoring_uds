@@ -220,7 +220,7 @@ def add_title_page(document):
   p = document.add_paragraph()
   p.alignment = WD_ALIGN_PARAGRAPH.CENTER
   p.paragraph_format.space_after = Pt(3)
-  set_run_font(p.add_run("Versión del manual: 1.0"), size=10, bold=True, color=NAVY)
+  set_run_font(p.add_run("Versión del manual: 1.1"), size=10, bold=True, color=NAVY)
   p = document.add_paragraph()
   p.alignment = WD_ALIGN_PARAGRAPH.CENTER
   set_run_font(p.add_run("Entorno objetivo: servidor de pruebas y piloto institucional"), size=10, color=MUTED)
@@ -343,7 +343,7 @@ def build_document():
   document.add_heading("Control del documento", level=1)
   add_table(document, ["Campo", "Valor"], [
     ("Documento", "Manual de implementación y uso - Proctoring UDS"),
-    ("Versión", "1.0"),
+    ("Versión", "1.1"),
     ("Audiencia", "Administradores de servidor, administradores Moodle, docentes, revisores y soporte"),
     ("Alcance", "Servidor de pruebas, validación funcional y preparación del piloto"),
     ("Base externa", "MariaDB exclusiva para proctoring"),
