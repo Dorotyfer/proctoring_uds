@@ -206,11 +206,20 @@ function authorizePanel(options) {
 function cookieOptions(options) {
   return {
     httpOnly: true,
-    path: '/v1/panel',
+    path: panelCookiePath(options),
     sameSite: options.secureCookies ? 'none' : 'lax',
     secure: options.secureCookies,
     maxAge: 1800
   };
+}
+
+function panelCookiePath(options) {
+  try {
+    const pathname = new URL(options.apiBaseUrl ?? options.apiOrigin).pathname.replace(/\/$/, '');
+    return `${pathname}/v1/panel`.replace('//', '/');
+  } catch {
+    return '/v1/panel';
+  }
 }
 
 function isCourseAuthorized(courseId, claims, authService) {

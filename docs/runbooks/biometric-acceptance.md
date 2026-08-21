@@ -2,6 +2,11 @@
 
 Use una cuenta Moodle y un curso de prueba. No ejecute esta matriz durante un examen real.
 
+La validación de cámara, certificado TLS y dos personas es manual. No se ejecuta como
+prueba automática desde este repositorio, porque depende del dominio público, permisos
+del navegador y el certificado instalado en cada equipo. Las pruebas automáticas siguen
+usando URLs simuladas y no realizan conexiones externas.
+
 ## Orden de ejecución
 
 1. Confirmar API, MariaDB, S3/MinIO, Moodle y frontend disponibles. Verificar que el bucket sea privado y que la API use HTTPS confiable.

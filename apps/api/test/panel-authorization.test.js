@@ -18,6 +18,7 @@ test('limits teacher panel queries to signed Moodle course claims', async () => 
     sessionService: {},
     logger: false,
     panel: {
+      apiBaseUrl: 'https://api.test/proctoring-api',
       apiOrigin: 'http://api.test',
       authService,
       cookieName: 'proctoring_panel',
@@ -59,6 +60,7 @@ test('limits teacher panel queries to signed Moodle course claims', async () => 
   });
 
   assert.equal(login.statusCode, 302);
+  assert.match(login.headers['set-cookie'], /Path=\/proctoring-api\/v1\/panel/);
   assert.equal(sessions.statusCode, 200);
   assert.equal(evidence.statusCode, 403);
   assert.deepEqual(receivedScopes, [{ courseIds: ['course-a'], institutional: false }]);

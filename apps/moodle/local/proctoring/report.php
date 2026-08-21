@@ -48,15 +48,17 @@ if (has_capability('local/proctoring:viewbiometricevidence', $systemcontext)) {
 }
 
 $apiurl = rtrim((string)get_config('local_proctoring', 'apiurl'), '/');
+$publicapiurl = rtrim((string)get_config('local_proctoring', 'publicapiurl'), '/');
 $panelurl = rtrim((string)get_config('local_proctoring', 'panelurl'), '/');
 if (empty($apiurl) || empty($panelurl)) {
     throw new moodle_exception('panelnotconfigured', 'local_proctoring');
 }
+$publicapiurl = $publicapiurl ?: $apiurl;
 
 $service = new \local_proctoring\panel_token_service();
 $token = $service->issue($USER->id, fullname($USER), $capabilities, $courseids, $reviewcourseids);
 $returnurl = $panelurl . '/panel';
-$destination = $apiurl . '/v1/panel/sso?' . http_build_query([
+$destination = $publicapiurl . '/v1/panel/sso?' . http_build_query([
     'token' => $token,
     'returnUrl' => $returnurl
 ]);
