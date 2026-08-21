@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 export const PANEL_CAPABILITIES = {
   institution: 'local/proctoring:viewinstitutionreports',
   review: 'local/proctoring:reviewowncoursealerts',
+  managePolicies: 'local/proctoring:managepolicies',
   view: 'local/proctoring:viewowncoursereports',
   viewEvidence: 'local/proctoring:viewbiometricevidence'
 };
@@ -56,6 +57,9 @@ export function createPanelAuthService(secret) {
     },
     canViewEvidence(claims) {
       return claims.capabilities.includes(PANEL_CAPABILITIES.viewEvidence);
+    },
+    canManageBiometrics(claims) {
+      return claims.capabilities.includes(PANEL_CAPABILITIES.managePolicies);
     }
   };
 }

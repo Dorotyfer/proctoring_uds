@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { captureReference } from '@/lib/camera';
 import { describeFaceState, evaluateChallengeStep } from '@/lib/face-analysis';
 import { detectFrame } from '@/lib/human';
 
@@ -62,7 +63,9 @@ export function LivenessCheck({ challenge, detector, onComplete, onFailure, stre
 
     const interval = window.setInterval(() => void inspect(), 300);
     const timeout = window.setTimeout(() => {
-      if (!completed.current) onFailure();
+      if (!completed.current) {
+        onFailure(video.readyState >= 2 ? captureReference(video) : null);
+      }
     }, 45_000);
     return () => {
       cancelled = true;

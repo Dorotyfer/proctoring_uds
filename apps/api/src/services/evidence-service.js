@@ -1,15 +1,17 @@
 import crypto from 'node:crypto';
 
 export function createEvidenceService(options) {
-  async function storeCapture(sessionId, kind, buffer) {
+  async function storeCapture(sessionId, kind, buffer, captureOptions = {}) {
     const encrypted = options.encryptionService.encrypt(buffer);
-    const objectKey = `${sessionId}/${kind}/${crypto.randomUUID()}.enc`;
+    const objectId = captureOptions.eventId ?? crypto.randomUUID();
+    const objectKey = `${sessionId}/${kind}/${objectId}.enc`;
     await options.objectStorage.put(objectKey, encrypted.ciphertext, 'application/octet-stream');
 
     try {
       return await options.repository.create({
         sessionId,
         kind,
+        eventId: captureOptions.eventId ?? null,
         objectKey,
         contentType: 'image/jpeg',
         byteSize: buffer.length,
@@ -28,8 +30,8 @@ export function createEvidenceService(options) {
     async storeIdentity(sessionId, buffer) {
       return storeCapture(sessionId, 'identity', buffer);
     },
-    async storeCapture(sessionId, kind, buffer) {
-      return storeCapture(sessionId, kind, buffer);
+    async storeCapture(sessionId, kind, buffer, captureOptions = {}) {
+      return storeCapture(sessionId, kind, buffer, captureOptions);
     },
     async readAuthorized(evidence) {
       const ciphertext = await options.objectStorage.get(evidence.objectKey);

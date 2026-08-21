@@ -52,3 +52,11 @@ export function sendEvidence(token, kind, capture) {
     method: 'POST'
   });
 }
+
+export function sendIncident(token, incident) {
+  const sessionId = readSessionId(token);
+  return request(`/v1/sessions/${sessionId}/incidents`, token, {
+    body: JSON.stringify(incident),
+    method: 'POST'
+  });
+}

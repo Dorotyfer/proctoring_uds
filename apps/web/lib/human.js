@@ -6,7 +6,8 @@ export async function createHumanDetector() {
     face: {
       detector: { rotation: true },
       enabled: true,
-      mesh: { enabled: true }
+      mesh: { enabled: true },
+      description: { enabled: true, skipFrames: 0, skipTime: 0 }
     },
     gesture: { enabled: false },
     hand: { enabled: false },

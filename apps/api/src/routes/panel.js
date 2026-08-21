@@ -48,6 +48,21 @@ export async function registerPanelRoutes(app, options) {
     return reply.code(204).send();
   });
 
+  app.post('/v1/panel/biometric-profiles/:moodleUserId/reset', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    if (!options.authService.canManageBiometrics(request.panelUser)) {
+      return reply.code(403).send({ error: 'Biometric profile management capability required' });
+    }
+    const moodleUserId = z.string().trim().min(1).max(255).safeParse(request.params.moodleUserId);
+    if (!moodleUserId.success || !options.biometricProfileRepository) {
+      return reply.code(400).send({ error: 'Invalid biometric profile request' });
+    }
+    const biometric = await options.biometricProfileRepository.reset(
+      moodleUserId.data,
+      request.panelUser.moodleUserId
+    );
+    return biometric ? { biometric } : reply.code(404).send({ error: 'Biometric profile not found' });
+  });
+
   app.get('/v1/panel/me', { preHandler: authorizePanel(options) }, async (request) => ({
     user: {
       moodleUserId: request.panelUser.moodleUserId,
@@ -141,7 +156,8 @@ export async function registerPanelRoutes(app, options) {
       moodleUserId: request.panelUser.moodleUserId,
       aud: 'proctoring-evidence'
     }, { expiresIn: '60s' });
-    return { url: `${options.apiOrigin}/v1/panel/evidence/${evidence.id}/content?accessToken=${encodeURIComponent(accessToken)}` };
+    const apiBaseUrl = options.apiBaseUrl ?? options.apiOrigin;
+    return { url: `${apiBaseUrl}/v1/panel/evidence/${evidence.id}/content?accessToken=${encodeURIComponent(accessToken)}` };
   });
 
   app.get('/v1/panel/evidence/:evidenceId/content', async (request, reply) => {

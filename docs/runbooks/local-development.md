@@ -17,11 +17,13 @@ El servicio de proctoring es independiente de Moodle. No usa Docker ni consulta 
 3. Ejecute las migraciones versionadas con `pnpm --filter @proctoring/api migrate`.
 4. Inicie la API con `pnpm api:dev`.
 
+Antes de ejecutar una prueba real, confirme los tres servicios con `pnpm api:infra:check`. El comando comprueba la API, MariaDB y el bucket S3/MinIO configurado.
+
 La API escucha en `http://127.0.0.1:3001` por defecto. En producción debe exponerse por HTTPS y limitarse a la red desde la que Moodle pueda alcanzarla.
 
 `GET /health` devuelve `200` cuando MariaDB está disponible y `503` cuando la API no puede consultar su base de datos. No incluye credenciales ni detalles de conexión.
 
-Genere `EVIDENCE_ENCRYPTION_KEY` con `openssl rand -base64 32`. Configure `WEB_ORIGIN` con el origen exacto de la aplicación web para restringir CORS.
+Genere `EVIDENCE_ENCRYPTION_KEY` y `BIOMETRIC_ENCRYPTION_KEY` con `openssl rand -base64 32`. Mantenga `BIOMETRIC_MATCH_THRESHOLD=0.5` salvo que la política institucional defina otro umbral. Configure `WEB_ORIGIN` con el origen exacto de la aplicación web para restringir CORS.
 
 Programe `pnpm api:evidence:purge` al menos una vez al día. La tarea elimina objetos vencidos, registra la acción y marca el metadato como eliminado.
 

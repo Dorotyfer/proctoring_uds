@@ -36,7 +36,7 @@ test('completes the Moodle-to-review pilot flow without cross-course or grading 
       identityPassed: true,
       livenessPassed: true,
       livenessChallenge: ['blink', 'turn-left'],
-      referenceCapture: `data:image/jpeg;base64,${Buffer.from('pilot-jpeg').toString('base64')}`
+      referenceCapture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9]).toString('base64')}`
     }
   });
   const event = await app.inject({

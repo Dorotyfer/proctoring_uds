@@ -181,6 +181,30 @@ test('rejects a forged panel token', () => {
   assert.equal(service.verifyMoodleToken(`${signToken({ exp: 9999999999 })}tampered`), null);
 });
 
+test('allows only institutional managers to require biometric re-enrollment', async () => {
+  const resetCalls = [];
+  const app = await buildPanelApp({
+    biometricProfileRepository: {
+      async reset(moodleUserId, actorMoodleUserId) {
+        resetCalls.push({ actorMoodleUserId, moodleUserId });
+        return { moodleUserId, state: 'revoked' };
+      }
+    }
+  });
+  const managerCookie = await signInPanel(app, [PANEL_CAPABILITIES.managePolicies, PANEL_CAPABILITIES.view]);
+  const teacherCookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+  const path = '/v1/panel/biometric-profiles/student-1/reset';
+
+  const managerResponse = await app.inject({ method: 'POST', url: path, headers: { cookie: managerCookie } });
+  const teacherResponse = await app.inject({ method: 'POST', url: path, headers: { cookie: teacherCookie } });
+
+  assert.equal(managerResponse.statusCode, 200);
+  assert.deepEqual(managerResponse.json().biometric, { moodleUserId: 'student-1', state: 'revoked' });
+  assert.equal(teacherResponse.statusCode, 403);
+  assert.deepEqual(resetCalls, [{ actorMoodleUserId: 'reviewer-1', moodleUserId: 'student-1' }]);
+  await app.close();
+});
+
 test('returns only alert evidence in an authorized session detail', async () => {
   const app = await buildPanelApp({
     repository: {
@@ -293,6 +317,7 @@ async function buildPanelApp(overrides = {}) {
       cookieName: 'proctoring_panel',
       evidenceRepository: overrides.evidenceRepository ?? {},
       evidenceService: overrides.evidenceService ?? {},
+      biometricProfileRepository: overrides.biometricProfileRepository ?? {},
       repository: overrides.repository ?? {},
       secureCookies: false,
       webOrigin: 'http://web.test'

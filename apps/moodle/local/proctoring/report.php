@@ -33,6 +33,9 @@ if (!$institutional) {
 $capabilities = [];
 if ($institutional) {
     $capabilities[] = 'local/proctoring:viewinstitutionreports';
+    if (has_capability('local/proctoring:managepolicies', $systemcontext)) {
+        $capabilities[] = 'local/proctoring:managepolicies';
+    }
 }
 if ($institutional || !empty($courseids)) {
     $capabilities[] = 'local/proctoring:viewowncoursereports';

@@ -32,6 +32,7 @@ it('shows the Moodle profile and only the courses returned by the scoped API', a
   expect(await screen.findByText('Persona revisora')).toBeInTheDocument();
   expect(screen.getByText('Acceso institucional')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Derecho/ })).toBeInTheDocument();
+  expect(screen.getByText(/Código: 7/)).toBeInTheDocument();
 });
 
 it('paginates the course catalog for institutional users', async () => {
@@ -97,6 +98,55 @@ it('renders only evidence marked as an incident', async () => {
 
   await waitFor(() => expect(screen.getByRole('button', { name: /Ver incidencia/ })).toBeInTheDocument());
   expect(screen.queryByText(/interval/)).not.toBeInTheDocument();
+});
+
+it('shows linked incident evidence with valid and invalid review actions', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana', studentDocumentLast4: null, quizName: 'Examen', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', status: 'active', deviceMode: 'browser',
+        alerts: [{ id: 'alert-1', type: 'biometric_mismatch', severity: 'high', status: 'open', evidenceId: 'evidence-1' }],
+        events: [],
+        evidence: [{ id: 'evidence-1', kind: 'alert', created_at: '2026-08-20T20:01:00.000Z' }]
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+
+  expect(await screen.findByRole('button', { name: /Válida/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Inválida/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Ver imagen de la incidencia/ })).toBeInTheDocument();
+  expect(screen.getByText('Identidad biométrica no coincidente')).toBeInTheDocument();
+});
+
+it('distinguishes an incident without a camera frame from a pending upload', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana', studentDocumentLast4: null, quizName: 'Examen', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', status: 'active', deviceMode: 'browser',
+        alerts: [{ id: 'alert-1', type: 'camera_interrupted', severity: 'high', status: 'open', evidenceId: null, captureStatus: 'unavailable' }],
+        events: [], evidence: []
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+
+  expect(await screen.findByText('Sin imagen disponible.')).toBeInTheDocument();
+  expect(screen.queryByText('Imagen pendiente de guardar.')).not.toBeInTheDocument();
 });
 
 const profile = {

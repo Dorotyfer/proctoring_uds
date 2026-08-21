@@ -38,6 +38,7 @@ try {
     try {
       await connection.query(sql);
       await ensureReferenceEvidenceForeignKey(connection, file);
+      await ensureIncidentEvidenceForeignKey(connection, file);
       await connection.execute(
         'INSERT INTO proctoring_schema_migrations (name) VALUES (?)',
         [file]
@@ -51,6 +52,28 @@ try {
   }
 } finally {
   await connection.end();
+}
+
+async function ensureIncidentEvidenceForeignKey(connection, migrationFile) {
+  if (migrationFile !== '006_incident_evidence.sql') {
+    return;
+  }
+
+  const [constraints] = await connection.execute(`
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_schema = DATABASE()
+      AND table_name = 'proctoring_evidence'
+      AND constraint_name = 'proctoring_evidence_event_fk'
+  `);
+  if (constraints.length > 0) {
+    return;
+  }
+
+  await connection.query(`
+    ALTER TABLE proctoring_evidence
+    ADD CONSTRAINT proctoring_evidence_event_fk
+    FOREIGN KEY (event_id) REFERENCES proctoring_events(id)
+  `);
 }
 
 async function ensureReferenceEvidenceForeignKey(connection, migrationFile) {

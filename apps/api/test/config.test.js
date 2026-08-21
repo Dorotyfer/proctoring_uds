@@ -5,6 +5,7 @@ import { loadConfig, loadDatabaseConfig } from '../src/config.js';
 
 const validEnvironment = {
   API_PUBLIC_URL: 'https://api.proctoring.example.edu',
+  BIOMETRIC_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString('base64'),
   DATABASE_URL: 'mysql://service-host:password@127.0.0.1:3306/proctoring',
   EVIDENCE_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   MOODLE_INTEGRATION_KEY: 'moodle-integration-key-with-32-characters',
@@ -19,10 +20,16 @@ const validEnvironment = {
 };
 
 test('loads independent service configuration', () => {
-  const config = loadConfig(validEnvironment);
+  const config = loadConfig({
+    ...validEnvironment,
+    API_PUBLIC_URL: 'https://api.proctoring.example.edu/api/'
+  });
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.port, 3001);
   assert.equal(config.evidenceRetentionDays, 30);
+  assert.equal(config.biometricMatchThreshold, 0.5);
+  assert.equal(config.apiOrigin, 'https://api.proctoring.example.edu');
+  assert.equal(config.apiBaseUrl, 'https://api.proctoring.example.edu/api');
   assert.equal(config.objectStorage.serverSideEncryption, 'AES256');
 });
 
@@ -47,6 +54,17 @@ test('allows migrations with only the external database URL', () => {
   assert.deepEqual(loadDatabaseConfig({ DATABASE_URL: validEnvironment.DATABASE_URL }), {
     databaseUrl: validEnvironment.DATABASE_URL
   });
+});
+
+test('rejects an invalid biometric key or threshold', () => {
+  assert.throws(() => loadConfig({
+    ...validEnvironment,
+    BIOMETRIC_ENCRYPTION_KEY: Buffer.alloc(16, 2).toString('base64')
+  }), /BIOMETRIC_ENCRYPTION_KEY/);
+  assert.throws(() => loadConfig({
+    ...validEnvironment,
+    BIOMETRIC_MATCH_THRESHOLD: '1.2'
+  }), /BIOMETRIC_MATCH_THRESHOLD/);
 });
 
 test('rejects non-MySQL database URLs', () => {

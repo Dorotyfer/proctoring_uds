@@ -14,7 +14,7 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   })));
 
   for (const migration of migrations) {
-    assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS/);
+    assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS|ALTER TABLE/);
   }
   const evidenceMigration = migrations.find((migration) => migration.file === '004_evidence_panel.sql');
   assert.match(evidenceMigration.sql, /object_key VARCHAR\((?:[1-6]\d\d|7[0-6]\d)\) NOT NULL UNIQUE/);
@@ -27,6 +27,20 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   assert.match(panelCatalogMigration.sql, /ADD COLUMN IF NOT EXISTS student_document/);
   assert.match(panelCatalogMigration.sql, /SELECT DISTINCT moodle_course_id/);
 
+  const incidentEvidenceMigration = migrations.find((migration) => migration.file === '006_incident_evidence.sql');
+  assert.ok(incidentEvidenceMigration);
+  assert.match(incidentEvidenceMigration.sql, /ADD COLUMN IF NOT EXISTS event_id CHAR\(36\) NULL/);
+  assert.match(incidentEvidenceMigration.sql, /proctoring_evidence_event_unique/);
+
+  const biometricMigration = migrations.find((migration) => migration.file === '007_biometric_profiles.sql');
+  assert.ok(biometricMigration);
+  assert.match(biometricMigration.sql, /proctoring_biometric_profiles/);
+  assert.match(biometricMigration.sql, /moodle_user_id VARCHAR\(255\) NOT NULL UNIQUE/);
+  assert.match(biometricMigration.sql, /proctoring_biometric_checks/);
+  assert.match(biometricMigration.sql, /proctoring_biometric_audit/);
+  assert.match(biometricMigration.sql, /biometric_mismatch/);
+
   const migrator = await fs.readFile(path.join(migrationsDirectory, '../migrate.js'), 'utf8');
   assert.match(migrator, /information_schema\.table_constraints/);
+  assert.match(migrator, /proctoring_evidence_event_fk/);
 });

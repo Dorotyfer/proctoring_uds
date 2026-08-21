@@ -1,6 +1,6 @@
 import { CreateSessionInput } from '@proctoring/contracts';
 
-export function createSessionService(repository, evidenceService) {
+export function createSessionService(repository, evidenceService, biometricService = null) {
   return {
     async create(input) {
       return repository.create(CreateSessionInput.parse(input));
@@ -23,12 +23,20 @@ export function createSessionService(repository, evidenceService) {
       if (!current || !['pending', 'active'].includes(current.status) || Date.parse(current.expiresAt) <= Date.now()) {
         return null;
       }
+      const biometric = biometricService
+        ? await biometricService.enrollOrVerify({
+          biometricConsentAccepted: preparation.biometricConsentAccepted,
+          biometricSamples: preparation.biometricSamples,
+          moodleUserId: current.moodleUserId,
+          sessionId: id
+        })
+        : null;
       const evidence = await evidenceService.storeIdentity(id, preparation.referenceCapture);
       const session = await repository.activate(id, {
         evidenceId: evidence.id,
         livenessChallenge: preparation.livenessChallenge
       });
-      return session;
+      return biometricService ? { biometric, session } : session;
     }
   };
 }

@@ -120,6 +120,18 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     }
   }
 
+  async function resetBiometrics(moodleUserId) {
+    if (!window.confirm('¿Exigir una nueva inscripción biométrica para esta cuenta?')) {
+      return;
+    }
+    try {
+      await api.resetBiometricProfile(moodleUserId);
+      await openSession(selectedSession.id);
+    } catch (error) {
+      handleRequestError(error, setAuthStatus, setContentStatus);
+    }
+  }
+
   async function logout() {
     await api.logout().catch(() => null);
     if (moodleReturnUrl) {
@@ -140,7 +152,7 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
         <button className="text-button" type="button" onClick={logout}>Cerrar sesión</button>
       </header>
       {contentStatus === 'error' ? <section className="panel-message error-text"><p>No fue posible cargar esta información.</p><button className="text-button" type="button" onClick={() => selectedCourse ? loadSessions() : loadCourses()}>Reintentar</button></section> : null}
-      {contentStatus !== 'error' && selectedSession ? <PanelSessionDetail session={selectedSession} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onReview={reviewAlert} /> : null}
+      {contentStatus !== 'error' && selectedSession ? <PanelSessionDetail canManageBiometrics={profile.scope === 'institutional'} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onResetBiometrics={resetBiometrics} onReview={reviewAlert} session={selectedSession} /> : null}
       {contentStatus !== 'error' && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
       {contentStatus !== 'error' && !selectedCourse ? <CourseList courses={courses} filters={courseFilters} loading={contentStatus === 'loading'} pagination={coursePagination} onFiltersChange={changeCourseFilters} onOpen={openCourse} onRetry={() => loadCourses()} /> : null}
     </div>

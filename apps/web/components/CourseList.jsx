@@ -31,7 +31,7 @@ export default function CourseList({ courses, filters, loading, pagination, onFi
           <button className="course-card" key={course.id} type="button" onClick={() => onOpen(course)}>
             <span>
               <strong>{course.name || `Curso ${course.id}`}</strong>
-              <small>{course.attemptCount} intentos registrados</small>
+              <small>Código: {course.code ?? course.id} · {course.attemptCount} intentos registrados</small>
             </span>
             <span className={course.openAlertCount > 0 ? 'badge warning' : 'badge'}>
               {course.openAlertCount} alertas abiertas

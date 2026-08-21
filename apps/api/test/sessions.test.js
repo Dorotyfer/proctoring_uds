@@ -154,7 +154,7 @@ test('exposes only browser-safe session data and activates after successful chec
       identityPassed: true,
       livenessPassed: true,
       livenessChallenge: ['blink', 'turn-left'],
-      referenceCapture: `data:image/jpeg;base64,${Buffer.from('jpeg').toString('base64')}`
+      referenceCapture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9]).toString('base64')}`
     }
   });
 
