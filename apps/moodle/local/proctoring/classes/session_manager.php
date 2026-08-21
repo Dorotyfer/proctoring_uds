@@ -27,11 +27,24 @@ class session_manager {
 
         $issuedat = time();
         $expiresat = $attempt->proctoringexpiresat ?? ($issuedat + (6 * HOURSECS));
+        $course = $DB->get_record('course', ['id' => $attempt->courseid], 'id, fullname', MUST_EXIST);
+        $quiz = $DB->get_record('quiz', ['id' => $attempt->quiz], 'id, name', MUST_EXIST);
+        $student = $DB->get_record(
+            'user',
+            ['id' => $attempt->userid],
+            'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename, idnumber',
+            MUST_EXIST
+        );
+        $studentdocument = trim((string)$student->idnumber);
         $payload = [
             'moodleUserId' => (string)$attempt->userid,
             'moodleCourseId' => (string)$attempt->courseid,
             'moodleQuizId' => (string)$attempt->quiz,
             'moodleAttemptId' => (string)$attempt->id,
+            'courseName' => $course->fullname,
+            'quizName' => $quiz->name,
+            'studentName' => fullname($student),
+            'studentDocument' => $studentdocument === '' ? null : $studentdocument,
             'deviceMode' => $devicemode,
             'issuedAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $issuedat),
             'expiresAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $expiresat)

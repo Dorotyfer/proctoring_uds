@@ -12,6 +12,7 @@ class panel_token_service_test extends \advanced_testcase {
         $service = new panel_token_service();
         $token = $service->issue(
             42,
+            'Docente Uno',
             ['local/proctoring:viewowncoursereports'],
             [10, 20],
             [10]
@@ -21,6 +22,7 @@ class panel_token_service_test extends \advanced_testcase {
 
         $this->assertCount(3, $parts);
         $this->assertSame('42', $payload['moodleUserId']);
+        $this->assertSame('Docente Uno', $payload['displayName']);
         $this->assertSame(['10', '20'], $payload['courseIds']);
         $this->assertSame(['10'], $payload['reviewCourseIds']);
         $this->assertLessThanOrEqual(time() + 120, $payload['exp']);

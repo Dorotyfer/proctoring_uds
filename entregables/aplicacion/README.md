@@ -17,7 +17,7 @@ La API no consulta la base de datos de Moodle. La comunicación usa HTTPS y una 
 - Aplicación web de preparación con cámara, encuadre, captura cifrada y prueba de vida.
 - Monitor persistente dentro del intento con cola local, reintentos y alertas revisables.
 - Evidencia cifrada en almacenamiento de objetos, retención configurable y auditoría de cada acceso.
-- Panel SSO de revisión con sesiones, alertas, notas y autorización aplicada por curso en el servidor.
+- Panel SSO con navegación por cursos e intentos, búsqueda, alertas, notas y autorización de gestores/docentes aplicada en el servidor.
 - Herramientas de fase 7 para prueba vertical, fixtures deterministas, recuperación, carga de 1.000 sesiones y aceptación del piloto.
 - Pendiente antes del uso real: ejecutar la matriz de dispositivos, PHPUnit y pruebas contra MariaDB/S3/Moodle institucionales.
 

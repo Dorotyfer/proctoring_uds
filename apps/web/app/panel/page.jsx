@@ -18,7 +18,7 @@ export default function PanelPage() {
       </header>
       <PanelDashboard
         apiUrl={process.env.NEXT_PUBLIC_PROCTORING_API_URL ?? 'http://localhost:3001'}
-        moodleLoginUrl={moodleOrigin ? `${moodleOrigin}/local/proctoring/report.php` : null}
+        moodleReturnUrl={moodleOrigin}
       />
     </main>
   );

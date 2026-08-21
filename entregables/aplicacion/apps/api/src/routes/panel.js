@@ -5,6 +5,19 @@ const ReviewInput = z.object({
   note: z.string().trim().max(2000).default('')
 });
 
+const PaginationQuery = z.object({
+  query: z.string().trim().max(100).default(''),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25)
+});
+
+const SessionListQuery = PaginationQuery.extend({
+  status: z.enum(['all', 'pending', 'active', 'completed', 'expired']).default('all'),
+  alerts: z.enum(['all', 'open', 'any', 'none']).default('all'),
+  dateFrom: z.string().date().optional(),
+  dateTo: z.string().date().optional()
+});
+
 export async function registerPanelRoutes(app, options) {
   app.get('/v1/panel/sso', async (request, reply) => {
     const parsed = z.object({
@@ -20,6 +33,7 @@ export async function registerPanelRoutes(app, options) {
     }
     const sessionToken = app.jwt.sign({
       moodleUserId: claims.moodleUserId,
+      displayName: claims.displayName,
       capabilities: claims.capabilities,
       courseIds: claims.courseIds,
       reviewCourseIds: claims.reviewCourseIds,
@@ -32,6 +46,38 @@ export async function registerPanelRoutes(app, options) {
   app.post('/v1/panel/logout', async (request, reply) => {
     reply.clearCookie(options.cookieName, cookieOptions(options));
     return reply.code(204).send();
+  });
+
+  app.get('/v1/panel/me', { preHandler: authorizePanel(options) }, async (request) => ({
+    user: {
+      moodleUserId: request.panelUser.moodleUserId,
+      displayName: request.panelUser.displayName,
+      scope: options.authService.scope(request.panelUser).institutional ? 'institutional' : 'courses',
+      canReview: options.authService.canReview(request.panelUser),
+      canViewEvidence: options.authService.canViewEvidence(request.panelUser)
+    }
+  }));
+
+  app.get('/v1/panel/courses', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    const query = PaginationQuery.safeParse(request.query);
+    if (!query.success) {
+      return reply.code(400).send({ error: 'Invalid course query' });
+    }
+    return options.repository.listCourses(options.authService.scope(request.panelUser), query.data);
+  });
+
+  app.get('/v1/panel/courses/:courseId/sessions', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    const courseId = z.string().trim().min(1).max(255).safeParse(request.params.courseId);
+    const query = SessionListQuery.safeParse(request.query);
+    if (!courseId.success || !query.success ||
+      !isCourseAuthorized(courseId.data, request.panelUser, options.authService)) {
+      return reply.code(404).send({ error: 'Course not found' });
+    }
+    return options.repository.listCourseSessions(
+      courseId.data,
+      options.authService.scope(request.panelUser),
+      query.data
+    );
   });
 
   app.get('/v1/panel/sessions', { preHandler: authorizePanel(options) }, async (request) => {
@@ -51,6 +97,8 @@ export async function registerPanelRoutes(app, options) {
     }
     if (!options.authService.canViewEvidence(request.panelUser)) {
       session.evidence = [];
+    } else {
+      session.evidence = session.evidence.filter((item) => item.kind === 'alert');
     }
     return { session };
   });
@@ -83,7 +131,8 @@ export async function registerPanelRoutes(app, options) {
       return reply.code(400).send({ error: 'Invalid evidence identifier' });
     }
     const evidence = await options.evidenceRepository.findById(id.data);
-    if (!evidence || !isCourseAuthorized(evidence.courseId, request.panelUser, options.authService)) {
+    if (!evidence || evidence.kind !== 'alert' ||
+      !isCourseAuthorized(evidence.courseId, request.panelUser, options.authService)) {
       return reply.code(404).send({ error: 'Evidence not found' });
     }
     await options.evidenceRepository.audit(auditInput(request, evidence.id, 'view'));
@@ -103,7 +152,7 @@ export async function registerPanelRoutes(app, options) {
         throw new Error('Invalid evidence access token');
       }
       const evidence = await options.evidenceRepository.findById(id.data);
-      if (!evidence) {
+      if (!evidence || evidence.kind !== 'alert') {
         return reply.code(404).send({ error: 'Evidence not found' });
       }
       const content = await options.evidenceService.readAuthorized(evidence);

@@ -34,6 +34,7 @@ test('limits teacher panel queries to signed Moodle course claims', async () => 
     }
   });
   const token = signToken({
+    displayName: 'Docente Uno',
     moodleUserId: 'teacher-1',
     capabilities: [PANEL_CAPABILITIES.view, PANEL_CAPABILITIES.review],
     courseIds: ['course-a'],
@@ -72,6 +73,107 @@ test('gives institutional reviewers an explicit global scope', () => {
     courseIds: [],
     reviewCourseIds: []
   }), { courseIds: [], institutional: true });
+});
+
+test('returns the signed Moodle profile without exposing course data', async () => {
+  const app = await buildPanelApp();
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.institution]);
+
+  const response = await app.inject({ method: 'GET', url: '/v1/panel/me', headers: { cookie } });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().user, {
+    canReview: true,
+    canViewEvidence: false,
+    displayName: 'Persona revisora',
+    moodleUserId: 'reviewer-1',
+    scope: 'institutional'
+  });
+  await app.close();
+});
+
+test('passes validated pagination and teacher scope to course queries', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    repository: {
+      async listCourses(scope, query) {
+        received.push({ query, scope });
+        return { courses: [], total: 0 };
+      }
+    }
+  });
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/courses?query=derecho&page=2&pageSize=50',
+    headers: { cookie }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(received, [{
+    query: { page: 2, pageSize: 50, query: 'derecho' },
+    scope: { courseIds: ['course-a'], institutional: false }
+  }]);
+  await app.close();
+});
+
+test('hides a course outside the teacher scope before listing attempts', async () => {
+  let repositoryCalls = 0;
+  const app = await buildPanelApp({
+    repository: {
+      async listCourseSessions() {
+        repositoryCalls += 1;
+        return { sessions: [], total: 0 };
+      }
+    }
+  });
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/courses/course-b/sessions',
+    headers: { cookie }
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(repositoryCalls, 0);
+  await app.close();
+});
+
+test('passes validated attempt filters to the scoped repository query', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    repository: {
+      async listCourseSessions(courseId, scope, query) {
+        received.push({ courseId, query, scope });
+        return { sessions: [], total: 0 };
+      }
+    }
+  });
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/courses/course-a/sessions?query=ana&status=active&alerts=open&dateFrom=2026-08-01&dateTo=2026-08-21&page=3&pageSize=10',
+    headers: { cookie }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(received[0], {
+    courseId: 'course-a',
+    query: {
+      alerts: 'open',
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-21',
+      page: 3,
+      pageSize: 10,
+      query: 'ana',
+      status: 'active'
+    },
+    scope: { courseIds: ['course-a'], institutional: false }
+  });
+  await app.close();
 });
 
 test('rejects a forged panel token', () => {
@@ -200,6 +302,7 @@ async function buildPanelApp(overrides = {}) {
 
 async function signInPanel(app, capabilities) {
   const token = signToken({
+    displayName: 'Persona revisora',
     moodleUserId: 'reviewer-1',
     capabilities,
     courseIds: ['course-a'],

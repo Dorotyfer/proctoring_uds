@@ -51,7 +51,7 @@ if (empty($apiurl) || empty($panelurl)) {
 }
 
 $service = new \local_proctoring\panel_token_service();
-$token = $service->issue($USER->id, $capabilities, $courseids, $reviewcourseids);
+$token = $service->issue($USER->id, fullname($USER), $capabilities, $courseids, $reviewcourseids);
 $returnurl = $panelurl . '/panel';
 $destination = $apiurl . '/v1/panel/sso?' . http_build_query([
     'token' => $token,

@@ -5,7 +5,13 @@ namespace local_proctoring;
 defined('MOODLE_INTERNAL') || die();
 
 class panel_token_service {
-    public function issue(int $userid, array $capabilities, array $courseids, array $reviewcourseids): string {
+    public function issue(
+        int $userid,
+        string $displayname,
+        array $capabilities,
+        array $courseids,
+        array $reviewcourseids
+    ): string {
         $secret = (string)get_config('local_proctoring', 'panelssosecret');
         if (strlen($secret) < 32) {
             throw new \moodle_exception('panelnotconfigured', 'local_proctoring');
@@ -14,6 +20,7 @@ class panel_token_service {
         $header = $this->base64url(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
         $payload = $this->base64url(json_encode([
             'moodleUserId' => (string)$userid,
+            'displayName' => $displayname,
             'capabilities' => array_values($capabilities),
             'courseIds' => array_values(array_map('strval', $courseids)),
             'reviewCourseIds' => array_values(array_map('strval', $reviewcourseids)),

@@ -9,6 +9,10 @@ export const CreateSessionInput = z.object({
   moodleCourseId: z.string().trim().min(1),
   moodleQuizId: z.string().trim().min(1),
   moodleAttemptId: z.string().trim().min(1),
+  courseName: z.string().trim().min(1).max(255),
+  quizName: z.string().trim().min(1).max(255),
+  studentName: z.string().trim().min(1).max(255),
+  studentDocument: z.string().trim().min(1).max(100).nullable(),
   deviceMode: DeviceMode,
   issuedAt: z.string().datetime(),
   expiresAt: z.string().datetime()

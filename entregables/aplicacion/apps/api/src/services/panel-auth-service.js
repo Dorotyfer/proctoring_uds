@@ -24,7 +24,8 @@ export function createPanelAuthService(secret) {
         if (header.alg !== 'HS256' || payload.aud !== 'proctoring-panel-sso' || payload.exp * 1000 <= Date.now()) {
           return null;
         }
-        if (typeof payload.moodleUserId !== 'string' || !Array.isArray(payload.capabilities) ||
+        if (typeof payload.moodleUserId !== 'string' || typeof payload.displayName !== 'string' ||
+          !Array.isArray(payload.capabilities) ||
           !Array.isArray(payload.courseIds) || !Array.isArray(payload.reviewCourseIds)) {
           return null;
         }

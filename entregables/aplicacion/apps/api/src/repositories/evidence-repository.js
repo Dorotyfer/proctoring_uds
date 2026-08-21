@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import { createMysqlPool } from '../db/mysql-pool.js';
-import { toIsoDate } from '../db/mysql-row.js';
+import { toIsoDate, toMysqlDate } from '../db/mysql-row.js';
 
 export function createEvidenceRepository(databaseUrl) {
   const pool = createMysqlPool(databaseUrl);
@@ -15,7 +15,7 @@ export function createEvidenceRepository(databaseUrl) {
           encryption_iv, encryption_tag, expires_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [id, input.sessionId, input.kind, input.objectKey, input.contentType,
-        input.byteSize, input.sha256, input.encryptionIv, input.encryptionTag, input.expiresAt]);
+        input.byteSize, input.sha256, input.encryptionIv, input.encryptionTag, toMysqlDate(input.expiresAt)]);
       return findEvidenceById(pool, id);
     },
     async findById(id) {

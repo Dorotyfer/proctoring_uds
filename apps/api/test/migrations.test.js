@@ -20,6 +20,13 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   assert.match(evidenceMigration.sql, /object_key VARCHAR\((?:[1-6]\d\d|7[0-6]\d)\) NOT NULL UNIQUE/);
   assert.doesNotMatch(evidenceMigration.sql, /ADD CONSTRAINT IF NOT EXISTS/);
 
+  const panelCatalogMigration = migrations.find((migration) => migration.file === '005_panel_course_catalog.sql');
+  assert.ok(panelCatalogMigration);
+  assert.match(panelCatalogMigration.sql, /CREATE TABLE IF NOT EXISTS proctoring_courses/);
+  assert.match(panelCatalogMigration.sql, /ADD COLUMN IF NOT EXISTS quiz_name/);
+  assert.match(panelCatalogMigration.sql, /ADD COLUMN IF NOT EXISTS student_document/);
+  assert.match(panelCatalogMigration.sql, /SELECT DISTINCT moodle_course_id/);
+
   const migrator = await fs.readFile(path.join(migrationsDirectory, '../migrate.js'), 'utf8');
   assert.match(migrator, /information_schema\.table_constraints/);
 });

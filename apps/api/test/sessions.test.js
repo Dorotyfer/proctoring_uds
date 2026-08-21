@@ -9,6 +9,10 @@ const payload = {
   moodleCourseId: 'course-1',
   moodleQuizId: 'quiz-1',
   moodleAttemptId: 'attempt-1',
+  courseName: 'Curso uno',
+  quizName: 'Cuestionario uno',
+  studentName: 'Estudiante Uno',
+  studentDocument: '1234567',
   deviceMode: 'browser',
   issuedAt: '2026-08-19T10:00:00.000Z',
   expiresAt: '2026-08-19T10:30:00.000Z'

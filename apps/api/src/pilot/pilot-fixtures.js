@@ -17,13 +17,17 @@ export function createPilotFixtures(options) {
     const suffix = String(number).padStart(4, '0');
     const course = number % 2 === 1 ? 'a' : 'b';
     return {
+      courseName: `Curso piloto ${course.toUpperCase()}`,
       deviceMode: course === 'a' ? 'browser' : 'seb',
       expiresAt,
       issuedAt: issuedAt.toISOString(),
       moodleAttemptId: `pilot-${seed}-attempt-${suffix}`,
       moodleCourseId: `pilot-course-${course}`,
       moodleQuizId: `pilot-quiz-${course}`,
-      moodleUserId: `pilot-student-${suffix}`
+      moodleUserId: `pilot-student-${suffix}`,
+      quizName: `Evaluación piloto ${course.toUpperCase()}`,
+      studentDocument: `PILOT-${suffix}`,
+      studentName: `Estudiante piloto ${suffix}`
     };
   });
 }

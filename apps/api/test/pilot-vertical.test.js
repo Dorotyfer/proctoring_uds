@@ -282,13 +282,17 @@ async function createMoodleSession(app, courseId, attemptId) {
     url: '/v1/internal/sessions',
     headers: { 'x-moodle-integration-key': 'moodle-key' },
     payload: {
+      courseName: `Curso ${courseId}`,
       deviceMode: courseId.endsWith('a') ? 'browser' : 'seb',
       expiresAt: expiresAt.toISOString(),
       issuedAt: issuedAt.toISOString(),
       moodleAttemptId: attemptId,
       moodleCourseId: courseId,
       moodleQuizId: `quiz-${courseId}`,
-      moodleUserId: `student-${courseId}`
+      moodleUserId: `student-${courseId}`,
+      quizName: `Evaluación ${courseId}`,
+      studentDocument: `DOC-${courseId}`,
+      studentName: `Estudiante ${courseId}`
     }
   });
   assert.equal(response.statusCode, 201);
@@ -300,6 +304,7 @@ async function signInTeacher(app) {
     aud: 'proctoring-panel-sso',
     capabilities: [PANEL_CAPABILITIES.view, PANEL_CAPABILITIES.review, PANEL_CAPABILITIES.viewEvidence],
     courseIds: ['pilot-course-a'],
+    displayName: 'Docente piloto',
     exp: Math.floor(Date.now() / 1000) + 60,
     moodleUserId: 'pilot-teacher-a',
     reviewCourseIds: ['pilot-course-a']

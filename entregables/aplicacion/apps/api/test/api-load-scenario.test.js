@@ -23,13 +23,17 @@ test('runs create, token, activation and event requests for one active session',
     referenceCapture: 'data:image/jpeg;base64,anBlZw=='
   });
   const fixture = {
+    courseName: 'Curso piloto A',
     deviceMode: 'browser',
     expiresAt: '2026-08-19T13:00:00.000Z',
     issuedAt: '2026-08-19T12:00:00.000Z',
     moodleAttemptId: 'pilot-attempt-0001',
     moodleCourseId: 'pilot-course-a',
     moodleQuizId: 'pilot-quiz-a',
-    moodleUserId: 'pilot-student-0001'
+    moodleUserId: 'pilot-student-0001',
+    quizName: 'Evaluación piloto A',
+    studentDocument: 'PILOT-0001',
+    studentName: 'Estudiante piloto 0001'
   };
   const result = await operation(fixture);
 

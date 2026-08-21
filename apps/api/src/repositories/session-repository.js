@@ -11,17 +11,36 @@ export function createSessionRepository(databaseUrl) {
       await pool.execute('SELECT 1');
     },
     async create(input) {
-      await pool.execute(`
-        INSERT INTO proctoring_sessions (
-          id, moodle_user_id, moodle_course_id, moodle_quiz_id, moodle_attempt_id,
-          device_mode, issued_at, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE moodle_attempt_id = VALUES(moodle_attempt_id)
-      `, [
-        crypto.randomUUID(), input.moodleUserId, input.moodleCourseId,
-        input.moodleQuizId, input.moodleAttemptId, input.deviceMode,
-        toMysqlDate(input.issuedAt), toMysqlDate(input.expiresAt)
-      ]);
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        await connection.execute(`
+          INSERT INTO proctoring_courses (moodle_course_id, name, updated_at)
+          VALUES (?, ?, UTC_TIMESTAMP(3))
+          ON DUPLICATE KEY UPDATE name = VALUES(name), updated_at = VALUES(updated_at)
+        `, [input.moodleCourseId, input.courseName]);
+        await connection.execute(`
+          INSERT INTO proctoring_sessions (
+            id, moodle_user_id, moodle_course_id, moodle_quiz_id, moodle_attempt_id,
+            quiz_name, student_name, student_document, device_mode, issued_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            quiz_name = VALUES(quiz_name),
+            student_name = VALUES(student_name),
+            student_document = VALUES(student_document)
+        `, [
+          crypto.randomUUID(), input.moodleUserId, input.moodleCourseId,
+          input.moodleQuizId, input.moodleAttemptId, input.quizName,
+          input.studentName, input.studentDocument, input.deviceMode,
+          toMysqlDate(input.issuedAt), toMysqlDate(input.expiresAt)
+        ]);
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
       return findByAttempt(pool, input.moodleAttemptId);
     },
     async findById(id) {
@@ -49,21 +68,23 @@ export function createSessionRepository(databaseUrl) {
 }
 
 async function findByAttempt(pool, attemptId) {
-  const [rows] = await pool.execute(sessionSelect('moodle_attempt_id = ?'), [attemptId]);
+  const [rows] = await pool.execute(sessionSelect('sessions.moodle_attempt_id = ?'), [attemptId]);
   return mapSession(rows[0]);
 }
 
 async function findById(pool, id) {
-  const [rows] = await pool.execute(sessionSelect('id = ?'), [id]);
+  const [rows] = await pool.execute(sessionSelect('sessions.id = ?'), [id]);
   return rows.length === 0 ? null : mapSession(rows[0]);
 }
 
 function sessionSelect(condition) {
   return `
-    SELECT id, moodle_user_id, moodle_course_id, moodle_quiz_id,
+    SELECT sessions.id, sessions.moodle_user_id, sessions.moodle_course_id, sessions.moodle_quiz_id,
       moodle_attempt_id, device_mode, status, issued_at, expires_at, created_at,
-      liveness_challenge
-    FROM proctoring_sessions WHERE ${condition}
+      quiz_name, student_name, student_document, liveness_challenge, courses.name AS course_name
+    FROM proctoring_sessions sessions
+    LEFT JOIN proctoring_courses courses ON courses.moodle_course_id = sessions.moodle_course_id
+    WHERE ${condition}
   `;
 }
 
@@ -74,6 +95,10 @@ function mapSession(row) {
     moodleCourseId: row.moodle_course_id,
     moodleQuizId: row.moodle_quiz_id,
     moodleAttemptId: row.moodle_attempt_id,
+    courseName: row.course_name,
+    quizName: row.quiz_name,
+    studentName: row.student_name,
+    studentDocument: row.student_document,
     deviceMode: row.device_mode,
     status: row.status,
     issuedAt: toIsoDate(row.issued_at),

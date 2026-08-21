@@ -14,3 +14,7 @@ export function toIsoDate(value) {
 
   return date.toISOString();
 }
+
+export function toMysqlDate(value) {
+  return toIsoDate(value).slice(0, -1).replace('T', ' ');
+}
