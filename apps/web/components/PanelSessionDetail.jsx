@@ -34,8 +34,10 @@ export default function PanelSessionDetail({ canManageBiometrics, session, onBac
       {incidentEvidence.length === 0 ? <p>No hay imágenes asociadas a incidencias.</p> : incidentEvidence.map((item) => (
         <button className="text-button evidence-link" type="button" key={item.id} onClick={() => onEvidence(item.id)}>Ver incidencia · {new Date(item.created_at).toLocaleString()}</button>
       ))}
-      <h3>Cronología</h3>
-      {session.events.map((event) => <article className="timeline-item" key={event.id}><strong>{event.type}</strong><p>{new Date(event.occurred_at).toLocaleString()}</p></article>)}
+      <section className="event-timeline" aria-label="Cronología de eventos">
+        <h3>Cronología</h3>
+        {session.events.map((event) => <article className="timeline-item" key={event.id}><strong>{alertTypeLabel(event.type)}</strong><p>{new Date(event.occurred_at).toLocaleString()}</p></article>)}
+      </section>
     </section>
   );
 }
@@ -60,18 +62,54 @@ function alertTypeLabel(type) {
   if (type === 'liveness_check_failed') return 'Falló la prueba de vida';
   if (type === 'identity_check_failed') return 'Falló la verificación de identidad';
   if (type === 'camera_interrupted') return 'Cámara interrumpida';
+  if (type === 'page_visibility_changed') return 'Cambio de visibilidad de la página';
+  if (type === 'network_disconnected') return 'Desconexión de red';
+  if (type === 'face_absent') return 'Rostro ausente';
+  if (type === 'face_out_of_frame') return 'Rostro fuera de encuadre';
+  if (type === 'seb_event') return 'Evento sospechoso de Safe Exam Browser';
   return type;
 }
 
 function BehaviorAnalysis({ risk }) {
+  const score = Math.max(0, Math.min(Number(risk.score) || 0, 100));
+
   return (
     <section className="behavior-analysis" aria-labelledby="behavior-analysis-title">
       <h3 id="behavior-analysis-title">Análisis de comportamiento</h3>
-      <p><strong>{riskCategoryLabel(risk.category)}</strong></p>
-      <p><span>Nivel de control: {controlLevelLabel(risk.controlLevel)}</span> · <span>Puntaje: {risk.score}/100</span></p>
-      {risk.reasons?.length ? <ul>{risk.reasons.map((reason) => <li key={reason.code}><strong>{alertTypeLabel(reason.code)}</strong>: {reason.count} evento(s), {reason.points} puntos</li>)}</ul> : <p>Sin señales relevantes detectadas.</p>}
+      <div className="risk-overview">
+        <RiskScore score={score} category={risk.category} />
+        <div>
+          <p><strong>{riskCategoryLabel(risk.category)}</strong></p>
+          <p><span>Nivel de control: {controlLevelLabel(risk.controlLevel)}</span> · <span>Puntaje: {score}/100</span></p>
+          <p className="risk-description">El puntaje resume las señales observadas durante el intento.</p>
+        </div>
+      </div>
+      <section aria-label="Señales detectadas" className="risk-signals">
+        <h4>Señales detectadas</h4>
+        {risk.reasons?.length ? risk.reasons.map((reason) => <div className="risk-signal" key={reason.code}>
+          <div><strong>{reason.label || alertTypeLabel(reason.code)}</strong><span>{reason.count} evento(s) · {reason.points} puntos</span></div>
+          <div className="risk-bar" aria-label={`${reason.label || alertTypeLabel(reason.code)}: ${reason.points} puntos`}><span style={{ width: `${Math.min(reason.points / 35 * 100, 100)}%` }} /></div>
+        </div>) : <p>Sin señales relevantes detectadas.</p>}
+      </section>
       <p>El análisis es orientativo y requiere revisión humana.</p>
     </section>
+  );
+}
+
+function RiskScore({ score, category }) {
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+
+  return (
+    <div className={`risk-score risk-score-${category}`}>
+      <svg role="img" aria-label={`Puntaje de riesgo: ${score} sobre 100`} viewBox="0 0 100 100">
+        <circle className="risk-score-track" cx="50" cy="50" r={radius} />
+        <circle className="risk-score-value" cx="50" cy="50" r={radius} strokeDasharray={circumference} strokeDashoffset={offset} />
+      </svg>
+      <strong>{score}</strong>
+      <span>/100</span>
+    </div>
   );
 }
 
