@@ -1,23 +1,30 @@
-# Arquitectura
+# Arquitectura activa
 
-```text
-Moodle
-  local/proctoring
-    └─ HTTPS + clave de integración ──> API de proctoring independiente
-                                      ├─ MariaDB/MySQL propia
-                                      └─ almacenamiento S3 compatible
-```
+## Fronteras
 
-Moodle conserva usuarios, cursos, cuestionarios, intentos y calificaciones. La API conserva sesiones, eventos, alertas y evidencia cifrada. No existe acceso directo de la API a la base de datos de Moodle.
+Moodle es el origen de intentos, cursos y permisos. Los plugins PHP emiten tokens de vida corta y consumen la API por TLS. FastAPI expone la API y las páginas Jinja2 bajo `/proctoring`; MariaDB persiste sesiones, revisiones, perfiles y eventos, y un almacén S3 compatible conserva evidencia cifrada. El worker Python procesa análisis y retención.
 
-La aplicación web externa realiza la detección facial localmente con `@vladmandic/human`. Después de la preparación, Moodle incorpora un iframe que conserva la cámara y el monitor durante el intento. Moodle confirma el estado activo mediante la API antes de mostrar el cuestionario; no confía en parámetros enviados por el navegador.
+El navegador ejecuta únicamente módulos ES nativos. Solicita consentimiento y cámara, captura JPEG, presenta indicaciones y encola JSON técnico limitado. No ejecuta inferencia, no conserva tokens ni imágenes en almacenamiento web y no emite conclusiones biométricas o de incidencia.
 
-La captura de referencia se cifra con AES-256-GCM antes de salir hacia el almacenamiento de objetos. MariaDB conserva únicamente metadatos, claves de objeto, IV, etiqueta de autenticación, vencimiento y auditoría. La evidencia se entrega mediante una URL de API de 60 segundos que descifra el objeto autorizado en memoria; el bucket nunca es público.
+## Flujo de análisis
 
-Moodle firma un token SSO de dos minutos con usuario, nombre visible, capacidades y cursos autorizados. La API lo intercambia por una cookie HTTP-only de 30 minutos. Todas las consultas del panel filtran por `moodle_course_id` en SQL, salvo la capacidad institucional explícita. La capacidad biométrica se verifica por separado.
+1. FastAPI valida el token y la URL de retorno contra el origen Moodle canónico.
+2. El navegador solicita un desafío y envía tres capturas para preparación, o capturas espaciadas para monitoreo.
+3. El servidor aplica YuNet para detección facial, SFace para identidad, FasNet para prueba de vida y SSDLite para personas y objetos permitidos por la política.
+4. Las observaciones se confirman en servidor; una muestra aislada no se transforma en alerta concluyente.
+5. Operadores autorizados revisan alertas y evidencia desde el panel con CSRF y aislamiento por curso.
 
-Al crear un intento, Moodle envía una copia mínima de los nombres del curso, cuestionario y estudiante, además del `idnumber` cuando existe. La API actualiza su catálogo de cursos y conserva estos datos para permitir búsquedas sin consultar la base de Moodle. Los listados enmascaran el documento y el valor completo solo aparece en el detalle autorizado.
+No existe análisis de emociones. No existe inferencia biométrica en navegador.
 
-La clave `MOODLE_INTEGRATION_KEY` solo se configura en el servidor Moodle y en la API. La creación devuelve únicamente la referencia de sesión. Moodle solicita un token de navegador de 15 minutos justo antes de redirigir al alumno y no lo persiste.
+## Seguridad y privacidad
 
-La cola del navegador persiste hasta 200 eventos y mantiene una copia en memoria si `localStorage` está temporalmente bloqueado. El cliente conserva el orden y reintenta al recuperar conectividad. Las operaciones S3 realizan tres intentos con espera exponencial acotada antes de devolver el error; no se escribe metadato de evidencia si el objeto no pudo almacenarse.
+- CSP sin `unsafe-inline` ni `unsafe-eval`, `frame-ancestors` restringido y política de permisos solo para cámara.
+- URLs de retorno comparadas con el origen Moodle exacto.
+- perfiles SFace versionados y cifrados; una sola versión activa por usuario;
+- evidencia cifrada, acceso auditado, retención configurada y borrado por worker;
+- IndexedDB limitado a eventos JSON de red, visibilidad, cámara y SEB; nunca imágenes, base64, descriptores ni tokens;
+- rollback de aplicación por Git; migraciones SQL aditivas y compatibles hacia atrás.
+
+## Despliegue
+
+Apache termina TLS y publica `/proctoring`. systemd ejecuta `proctoring-api` y `proctoring-worker` en un entorno virtual Python dedicado. No se necesita un runtime web adicional ni un paso de compilación del frontend.

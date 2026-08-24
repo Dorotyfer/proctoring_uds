@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proctoring-api"
+version = "0.1.0"
+description = "Server-side proctoring API"
+requires-python = "==3.12.*"
+dependencies = [
+  "fastapi==0.115.12",
+  "pydantic==2.10.6",
+  "pyjwt==2.10.1",
+  "asyncmy==0.2.10",
+  "sqlalchemy==2.0.38",
+  "uvicorn==0.34.0",
+  "boto3==1.37.0",
+  "cryptography==44.0.2",
+  "jinja2==3.1.5",
+  "pillow==11.1.0",
+  "python-multipart==0.0.20"
+]
+
+[project.scripts]
+proctoring-migrate = "proctoring.db.migrations:main"
+proctoring-api = "proctoring.main:main"
+proctoring-check-infra = "proctoring.cli:check_infrastructure_main"
+proctoring-purge = "proctoring.cli:purge_main"
+proctoring-purge-staging = "proctoring.cli:purge_staging_main"
+proctoring-worker = "proctoring.worker_main:main"
+proctoring-models = "proctoring.models_cli:main"
+proctoring-benchmark = "proctoring.benchmark:main"
+proctoring-fixtures = "proctoring.pilot:fixtures_main"
+proctoring-load = "proctoring.pilot:load_main"
+
+[project.optional-dependencies]
+test = [
+  "httpx==0.28.1",
+  "pytest==8.3.5"
+]
+vision = [
+  "deepface==0.0.100",
+  "torch==2.13.0",
+  "torchvision==0.28.0",
+  "opencv-contrib-python-headless==4.14.0.94"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+  "integration: requires TEST_DATABASE_URL and S3 test settings",
+  "inference: requires a release-ready manifest and approved local model weights",
+  "selenium: requires Chrome/Chromium and a matching driver"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+proctoring = ["web/templates/*.html", "web/static/css/*.css", "web/static/js/*.js"]

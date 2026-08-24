@@ -1,5 +1,7 @@
 # Moodle Proctoring MVP Implementation Plan
 
+> **Historical plan:** superseded by `2026-08-24-fastapi-server-vision.md`. Commands and architecture below are retained only as project history and are not active instructions.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver a Moodle 4.3.3 proctoring MVP with web biometric controls, optional native SEB, encrypted evidence, human-review alerts, and course-scoped reports.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily UDS Proctoring expired evidence purge
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+Unit=proctoring-purge.service
+
+[Install]
+WantedBy=timers.target

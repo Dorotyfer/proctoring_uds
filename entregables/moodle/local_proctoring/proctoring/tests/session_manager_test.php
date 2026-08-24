@@ -39,6 +39,7 @@ class session_manager_test extends \advanced_testcase {
                 $this->assertSame('Examen final', $payload['quizName']);
                 $this->assertSame('Ana Pérez', $payload['studentName']);
                 $this->assertSame('1234567', $payload['studentDocument']);
+                $this->assertSame('block', $payload['failurePolicy']);
                 return true;
             }
         ))->willReturn(['session' => ['id' => 'remote-session', 'status' => 'pending']]);
@@ -63,5 +64,33 @@ class session_manager_test extends \advanced_testcase {
         ))->willReturn(['session' => ['id' => 'remote-session-2', 'status' => 'pending']]);
 
         (new session_manager($client))->create_for_attempt($attempt, 'browser');
+    }
+
+    public function test_sends_explicit_allow_with_alert_failure_policy(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $attempt = (object)[
+            'id' => 125,
+            'userid' => $student->id,
+            'courseid' => $course->id,
+            'quiz' => $quiz->id
+        ];
+        $client = $this->createMock(api_client::class);
+        $client->expects($this->once())->method('create_session')->with($this->callback(
+            fn(array $payload): bool => $payload['failurePolicy'] === 'allow_with_alert'
+        ))->willReturn(['session' => ['id' => 'remote-session-3', 'status' => 'pending']]);
+
+        (new session_manager($client))->create_for_attempt($attempt, 'browser', 'allow_with_alert');
+    }
+
+    public function test_rejects_unsupported_failure_policy(): void {
+        $client = $this->createMock(api_client::class);
+        $manager = new session_manager($client);
+        $attempt = (object)['id' => 126];
+
+        $this->expectException(\coding_exception::class);
+        $manager->create_for_attempt($attempt, 'browser', 'continue_silently');
     }
 }

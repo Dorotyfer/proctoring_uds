@@ -1,5 +1,7 @@
 # Diseño: migración de persistencia a MariaDB 10.11
 
+> **Documento histórico:** registra una migración anterior sobre el runtime retirado. Sus comandos no deben ejecutarse; use los runbooks Python vigentes.
+
 ## Objetivo
 
 La API Node.js de Proctoring UDS usará exclusivamente MySQL/MariaDB 10.11.14 o posterior. PostgreSQL deja de ser una dependencia del código, las migraciones, pruebas, documentación y paquete distribuible. No existe información que migrar desde PostgreSQL.

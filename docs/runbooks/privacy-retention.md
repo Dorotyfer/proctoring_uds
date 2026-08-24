@@ -1,24 +1,27 @@
-# Privacidad, evidencia y retención
+# Privacidad y retención
 
-## Datos almacenados
+## Datos
 
-- Sesiones remotas enlazadas mediante identificadores Moodle, sin copiar nombres ni correos.
-- Eventos técnicos y alertas para revisión humana.
-- Una captura JPEG de identidad por sesión; no se graba vídeo continuo.
-- Metadatos de auditoría de cada visualización, descarga y eliminación.
+- MariaDB: sesiones, eventos técnicos, perfiles biométricos cifrados, alertas, revisiones y auditoría.
+- S3 compatible: evidencia cifrada con metadatos mínimos.
+- Navegador: solo cola IndexedDB de eventos JSON acotados; imágenes pendientes únicamente en memoria.
 
-## Protección
-
-La captura se cifra con AES-256-GCM antes de escribirse en un bucket S3 compatible con cifrado del lado del servidor. El bucket debe ser privado y accesible únicamente por la identidad de la API. La clave `EVIDENCE_ENCRYPTION_KEY`, las credenciales S3 y `PANEL_SSO_SECRET` se administran fuera del código.
-
-La API solo emite acceso por 60 segundos después de comprobar la cookie del panel, el curso autorizado y `local/proctoring:viewbiometricevidence`. Cada autorización y descarga genera una fila de auditoría.
+Nunca se persisten en el navegador tokens, JPEG/base64, descriptores faciales ni conclusiones locales. No se recopilan emociones.
 
 ## Retención
 
-`EVIDENCE_RETENTION_DAYS` define la conservación desde la creación de cada objeto. Ejecute diariamente:
+El worker Python aplica los plazos configurados por la institución y registra cada eliminación. Un borrado se considera completo cuando se elimina el objeto cifrado y se actualiza su registro transaccional. Los fallos se reintentan sin ampliar permisos ni ocultar el estado al operador.
+
+## Acceso y solicitudes
+
+El acceso a evidencia exige rol y curso autorizados, queda auditado y entrega una URL temporal. Las solicitudes de acceso, corrección o eliminación siguen el procedimiento institucional; una retención legal documentada prevalece hasta su liberación.
+
+## Verificación operativa
 
 ```bash
-pnpm api:evidence:purge
+source /opt/proctoring/current/.venv/bin/activate
+proctoring-worker --once
+journalctl -u proctoring-worker --since today
 ```
 
-La tarea elimina primero el objeto, registra `retention_delete` y luego marca el metadato como eliminado. La institución debe fijar el plazo y el procedimiento de excepciones antes del piloto.
+No se borran migraciones ni tablas históricas durante una limpieza de aplicación.

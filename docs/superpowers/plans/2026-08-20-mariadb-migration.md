@@ -1,5 +1,7 @@
 # MariaDB Migration Implementation Plan
 
+> **Historical plan:** superseded by `2026-08-24-fastapi-server-vision.md`. Commands below document the retired runtime and must not be used for current development or deployment.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Node.js proctoring API and its distributable package run exclusively on MariaDB/MySQL 10.11 instead of PostgreSQL.

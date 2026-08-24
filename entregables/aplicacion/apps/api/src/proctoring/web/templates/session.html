@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Proctoring UDS</title>
+    <link rel="stylesheet" href="{{ asset_base }}/css/app.css">
+  </head>
+  <body>
+    <div
+      id="session-bootstrap"
+      hidden
+      data-api-base-url="{{ api_base_url }}"
+      data-mode="{{ mode }}"
+      data-return-url="{{ return_url or '' }}"
+      data-token="{{ token }}"
+    ></div>
+    <main class="shell" id="session-app">
+      <section class="card" aria-labelledby="session-title">
+        <p class="eyebrow">Proctoring UDS</p>
+        <h1 id="session-title">Preparando la sesión</h1>
+        <p id="session-description">Validaremos tu cámara y la prueba de vida antes de continuar.</p>
+
+        <div id="consent-view" hidden>
+          <div class="notice">
+            <h2>Consentimiento biométrico</h2>
+            <p>Se analizarán capturas de tu rostro para validar identidad y presencia. Las capturas se envían al servidor y no se guardan en este navegador.</p>
+            <label class="check-row" for="biometric-consent">
+              <input id="biometric-consent" type="checkbox">
+              Acepto el análisis biométrico para esta evaluación.
+            </label>
+          </div>
+          <button class="button" id="start-camera" type="button" disabled>Continuar y activar cámara</button>
+        </div>
+
+        <div id="camera-view" hidden>
+          <video class="video" id="camera-video" autoplay muted playsinline aria-label="Vista previa de la cámara"></video>
+          <canvas id="capture-canvas" width="640" height="480" hidden></canvas>
+          <p class="status" id="camera-status" role="status" aria-live="polite">
+            <span class="status-dot warning" aria-hidden="true"></span>
+            Esperando acceso a la cámara.
+          </p>
+          <ol class="steps" id="challenge-steps" aria-label="Pasos de prueba de vida"></ol>
+          <div class="prompt" id="challenge-prompt" tabindex="-1" aria-live="assertive"></div>
+          <button class="button" id="capture-step" type="button" hidden>Capturar imagen</button>
+        </div>
+
+        <div id="monitor-view" hidden>
+          <p class="status" role="status">
+            <span class="status-dot" aria-hidden="true"></span>
+            Supervisión activa. Conservá esta ventana abierta durante la evaluación.
+          </p>
+        </div>
+
+        <div id="complete-view" hidden>
+          <h2>Preparación completada</h2>
+          <p id="preparation-result" role="status" aria-live="polite"></p>
+          <a class="button" id="continue-link" hidden rel="noreferrer">Continuar a Moodle</a>
+        </div>
+
+        <p class="status-message" id="session-status" role="status" aria-live="polite">Cargando sesión…</p>
+        <div class="error-panel" id="session-error" role="alert" hidden>
+          <p></p>
+          <button class="text-button" id="retry-session" type="button">Reintentar</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="{{ asset_base }}/js/session-bootstrap.js"></script>
+  </body>
+</html>

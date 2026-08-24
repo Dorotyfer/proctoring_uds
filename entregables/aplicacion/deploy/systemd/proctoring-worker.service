@@ -1,0 +1,38 @@
+[Unit]
+Description=UDS Proctoring vision worker
+After=network-online.target proctoring-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proctoring
+Group=proctoring
+WorkingDirectory=/opt/proctoring/current/apps/api
+EnvironmentFile=/etc/proctoring/proctoring.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ExecStartPre=/opt/proctoring/current/venv/bin/proctoring-models verify --manifest ${MODEL_MANIFEST_PATH}
+ExecStart=/opt/proctoring/current/venv/bin/proctoring-worker
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=180s
+TimeoutStopSec=130s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+MemoryMax=8G
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

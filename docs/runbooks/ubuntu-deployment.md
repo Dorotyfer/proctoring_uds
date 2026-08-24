@@ -36,7 +36,7 @@ sudo ./scripts/install-ubuntu.sh \
 
 El instalador crea una release inmutable bajo `/opt/proctoring/releases`, instala el extra Python `vision`, copia solo pesos cuyo SHA coincide y ejecuta `proctoring-models verify`. Luego aplica las migraciones aditivas y comprueba infraestructura antes de cambiar el symlink `current` atómicamente. Si falla el arranque posterior, restaura automáticamente la release anterior. Ni API ni worker arrancan si la verificación local falla. No existe descarga de modelos durante el arranque.
 
-Instale `deploy/apache/proctoring.conf` únicamente en el vhost servido detrás del TLS institucional. El formato de access log usa `%U`, no registra query strings y por tanto evita registrar tokens SSO. Apache no sobrescribe el CSP dinámico de FastAPI. No existe mapping `/_next/`.
+Instale `deploy/apache/proctoring.conf` únicamente en el vhost servido detrás del TLS institucional. El formato de access log usa `%U`, no registra query strings y por tanto evita registrar tokens SSO. Apache no sobrescribe el CSP dinámico de FastAPI y solo publica las rutas Python declaradas.
 
 ## Operación
 
@@ -69,3 +69,9 @@ sudo ./scripts/rollback-ubuntu.sh
 ```
 
 El rollback intercambia el symlink `current` de forma atómica, vuelve a verificar modelos y reinicia API/worker. Las migraciones son aditivas y se conservan; no restaure un backup de base de datos sobre actividad posterior. Si una release introduce una incompatibilidad de datos, detenga captura, preserve MariaDB/S3 y siga un plan institucional específico.
+
+## Retiro de la release heredada
+
+La release Node anterior no forma parte del código ni de los entregables activos. Durante la migración, el operador debe detener y deshabilitar sus servicios en el servidor, impedir que atienda tráfico y conservar su directorio de release y logs con acceso restringido durante siete días. No debe ejecutarse en paralelo con FastAPI.
+
+Durante esa ventana se monitorea la release Python. Un rollback excepcional usa una release histórica etiquetada en Git y requiere aprobación de incidente; nunca revierte migraciones ni borra tablas. Cumplidos los siete días y aprobada la estabilidad, el operador elimina el directorio heredado según el procedimiento institucional. Esta retención es una operación del servidor, no una dependencia activa.

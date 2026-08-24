@@ -22,11 +22,12 @@ class observer {
             $attempt->proctoringexpiresat = min($attempt->proctoringexpiresat, $quiz->timeclose + HOURSECS);
         }
         $manager = new \local_proctoring\session_manager(new \local_proctoring\api_client());
+        $failurepolicy = $settings->failurepolicy ?? 'block';
 
         try {
-            $manager->create_for_attempt($attempt, self::resolve_device_mode($settings));
+            $manager->create_for_attempt($attempt, self::resolve_device_mode($settings), $failurepolicy);
         } catch (\Throwable $error) {
-            if ($settings->failurepolicy === 'allow_with_alert') {
+            if ($failurepolicy === 'allow_with_alert') {
                 self::record_failed_session($attempt->id);
                 return;
             }

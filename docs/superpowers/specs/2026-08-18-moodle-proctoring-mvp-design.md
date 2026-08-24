@@ -1,5 +1,7 @@
 # MVP de proctoring para Moodle 4.3.3
 
+> **Documento histórico:** describe la arquitectura sustituida. No contiene instrucciones operativas activas; use `README.md`, `docs/architecture.md` y los runbooks vigentes.
+
 ## Objetivo
 
 Construir un sistema de proctoring integrado con Moodle 4.3.3. Un estudiante rinde el cuestionario desde un navegador normal o, opcionalmente, desde Safe Exam Browser (SEB). El sistema recoge controles biométricos y de sesión, genera evidencia revisable y presenta reportes según el alcance académico de cada usuario.

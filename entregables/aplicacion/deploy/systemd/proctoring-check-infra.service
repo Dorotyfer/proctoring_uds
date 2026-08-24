@@ -1,0 +1,23 @@
+[Unit]
+Description=UDS Proctoring infrastructure readiness check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=proctoring
+Group=proctoring
+WorkingDirectory=/opt/proctoring/current/apps/api
+EnvironmentFile=/etc/proctoring/proctoring.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ExecStart=/opt/proctoring/current/venv/bin/proctoring-check-infra
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
