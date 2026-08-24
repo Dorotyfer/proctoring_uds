@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Revisión de proctoring</title>
+    <link rel="stylesheet" href="{{ asset_base }}/css/app.css">
+  </head>
+  <body>
+    <div
+      id="panel-bootstrap"
+      hidden
+      data-api-base-url="{{ api_base_url }}"
+      data-moodle-origin="{{ moodle_origin }}"
+    ></div>
+    <main class="panel-shell">
+      <header class="panel-header">
+        <p class="eyebrow">Proctoring UDS</p>
+        <h1>Revisión de sesiones</h1>
+        <p>Las alertas requieren revisión humana y no modifican calificaciones.</p>
+      </header>
+      <div id="panel-app" class="panel-app" aria-busy="true"></div>
+      <p id="panel-live-status" class="sr-only" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="{{ asset_base }}/js/panel-bootstrap.js"></script>
+  </body>
+</html>

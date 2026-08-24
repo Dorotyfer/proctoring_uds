@@ -25,6 +25,8 @@ class Settings(BaseModel):
   evidence_encryption_key: str = Field(validation_alias="EVIDENCE_ENCRYPTION_KEY")
   biometric_encryption_key: str = Field(validation_alias="BIOMETRIC_ENCRYPTION_KEY")
   web_origin: str = Field(validation_alias="WEB_ORIGIN")
+  moodle_origin: str | None = Field(default=None, validation_alias="MOODLE_ORIGIN")
+  panel_url: str = Field(default="/proctoring", validation_alias="PANEL_URL")
   api_public_url: str = Field(validation_alias="API_PUBLIC_URL")
   panel_sso_secret: str = Field(min_length=32, validation_alias="PANEL_SSO_SECRET")
   s3_endpoint: str = Field(validation_alias="S3_ENDPOINT")
@@ -69,6 +71,15 @@ class Settings(BaseModel):
     return self.api_public_url.rstrip("/")
 
   @property
+  def web_public_base_path(self) -> str:
+    """Public proxy prefix used by browser assets, never an external origin."""
+
+    if self.panel_url.startswith("/"):
+      return self.panel_url.rstrip("/") or "/"
+    path = urlsplit(self.panel_url).path.rstrip("/")
+    return path or "/"
+
+  @property
   def evidence_encryption_key_bytes(self) -> bytes:
     return base64.b64decode(self.evidence_encryption_key, validate=True)
 
@@ -93,6 +104,9 @@ class Settings(BaseModel):
     _validate_database_url(self.database_url)
 
     self.web_origin = _origin(self.web_origin)
+    if self.moodle_origin is not None:
+      self.moodle_origin = _origin(self.moodle_origin)
+    self.panel_url = _panel_url(self.panel_url)
     self.api_public_url = _absolute_http_url(self.api_public_url).rstrip("/")
     self.s3_endpoint = _absolute_http_url(self.s3_endpoint).rstrip("/")
     if self.s3_server_side_encryption == "none":
@@ -109,6 +123,17 @@ class Settings(BaseModel):
     if self.liveness_center_threshold >= self.liveness_turn_threshold:
       raise ValueError("LIVENESS_CENTER_THRESHOLD must be lower than LIVENESS_TURN_THRESHOLD")
     return self
+
+
+def _panel_url(value: str) -> str:
+  if not isinstance(value, str) or not value.startswith(("/", "http://", "https://")):
+    raise ValueError("PANEL_URL must be a root-relative path or absolute HTTP(S) URL")
+  if value.startswith("/"):
+    parsed = urlsplit(value)
+    if value.startswith("//") or parsed.query or parsed.fragment or ".." in parsed.path.split("/"):
+      raise ValueError("PANEL_URL must be a safe root-relative path")
+    return parsed.path.rstrip("/") or "/"
+  return _absolute_http_url(value).rstrip("/")
 
 
 def _absolute_http_url(value: str) -> str:

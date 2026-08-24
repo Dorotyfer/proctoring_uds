@@ -109,7 +109,9 @@ def create_runtime_app(
     biometric_profile_repository=dependencies.biometric_profiles,
     panel_sso_secret=settings.panel_sso_secret,
     api_public_url=settings.api_base_url,
-    analysis_service=analysis_service
+    analysis_service=analysis_service,
+    moodle_origin=settings.moodle_origin,
+    web_public_base_path=settings.web_public_base_path
   )
 
   @asynccontextmanager

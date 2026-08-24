@@ -76,7 +76,9 @@ def create_app(
   biometric_profile_repository: object | None = None,
   panel_sso_secret: str | None = None,
   api_public_url: str | None = None,
-  analysis_service: object | None = None
+  analysis_service: object | None = None,
+  moodle_origin: str | None = None,
+  web_public_base_path: str = "/proctoring"
 ) -> FastAPI:
   """Build an HTTP-only application without loading runtime configuration or models."""
 
@@ -138,6 +140,14 @@ def create_app(
       api_public_url=api_public_url))
   if analysis_service and jwt_secret and session_service:
     _register_analysis_routes(app, analysis_service, session_service, jwt_secret)
+  if api_public_url:
+    from proctoring_api.web import register_web_ui
+    register_web_ui(
+      app,
+      api_public_url=api_public_url,
+      moodle_origin=moodle_origin,
+      public_base_path=web_public_base_path
+    )
   return app
 
 

@@ -47,7 +47,8 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
   "integration: requires TEST_DATABASE_URL and S3 test settings",
-  "inference: requires a release-ready manifest and approved local model weights"
+  "inference: requires a release-ready manifest and approved local model weights",
+  "selenium: requires Chrome/Chromium and a matching driver"
 ]
 
 [tool.setuptools]
@@ -55,3 +56,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+proctoring_api = ["web/templates/*.html", "web/static/css/*.css", "web/static/js/*.js"]
