@@ -47,9 +47,15 @@ sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-check-infra
 sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-purge
 sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-purge-staging
 sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-models verify --manifest /etc/proctoring/model-weights.json
+sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-benchmark \
+  --manifest /etc/proctoring/model-weights.json \
+  --corpus-dir /var/lib/proctoring/benchmark-corpus \
+  --samples 100
 ```
 
 Comandos instalados: `proctoring-api`, `proctoring-worker`, `proctoring-migrate`, `proctoring-check-infra`, `proctoring-purge`, `proctoring-purge-staging`, `proctoring-models`, `proctoring-fixtures`, `proctoring-load` y `proctoring-benchmark`.
+
+El corpus del benchmark debe ser institucional, autorizado, no productivo y contener JPEG válidos entre 320×240 y 1280×720, con máximo 200 KB. Cada trabajo medido ejecuta DeepFace y SSDLite con pesos locales verificados. La salida calcula `workersFor15JobsPerSecond`, informa el pico de RAM y reserva 30%; solo una ejecución real produce `slaValid: true`. `--fake` sirve únicamente para comprobar el formato y nunca acredita capacidad.
 
 Fixtures sintéticos y carga acotada:
 

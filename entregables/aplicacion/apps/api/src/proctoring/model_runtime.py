@@ -11,6 +11,15 @@ from proctoring.services.objects import SSDLiteAdapter
 from proctoring.services.vision import DeepFaceAdapter, FaceLandmarks, RawFace
 
 
+REQUIRED_WORKER_MODEL_IDS = frozenset({
+  "opencv-face-detection-yunet-2023mar",
+  "deepface-sface",
+  "deepface-fasnet-v2",
+  "deepface-fasnet-v1se",
+  "torchvision-ssdlite320-mobilenet-v3-large",
+})
+
+
 class LocalModelBundle:
   def __init__(
     self,

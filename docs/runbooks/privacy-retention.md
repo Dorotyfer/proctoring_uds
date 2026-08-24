@@ -19,7 +19,7 @@ El acceso a evidencia exige rol y curso autorizados, queda auditado y entrega un
 ## Verificación operativa
 
 ```bash
-source /opt/proctoring/current/.venv/bin/activate
+source /opt/proctoring/current/venv/bin/activate
 proctoring-worker --once
 journalctl -u proctoring-worker --since today
 ```

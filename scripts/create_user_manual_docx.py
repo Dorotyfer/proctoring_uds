@@ -383,7 +383,11 @@ systemd --> proctoring-api
   code_block(document, """
 sudo install -d -m 0750 -o root -g proctoring /etc/proctoring
 sudo install -m 0640 -o root -g proctoring proctoring.env /etc/proctoring/proctoring.env
-sudo bash scripts/install-ubuntu.sh /ruta/release /ruta/modelos-offline
+sudo bash scripts/install-ubuntu.sh \
+  --source /ruta/release \
+  --env /etc/proctoring/proctoring.env \
+  --manifest /ruta/model-weights.json \
+  --models-source /ruta/modelos-offline
 """)
   callout(document, "Minimo privilegio", "No reutilice la base, usuario o secretos de Moodle. MariaDB y S3 deben permanecer fuera de Internet.", "danger")
 
@@ -401,9 +405,12 @@ sudo bash scripts/install-ubuntu.sh /ruta/release /ruta/modelos-offline
   ], [2200, 7160]))
 
   section(document, "6. Modelos e inferencia", "Los modelos se instalan fuera de linea. El arranque verifica archivos y hashes; nunca descarga pesos.", commands="""
-sudo -u proctoring /opt/proctoring/current/.venv/bin/proctoring-models verify \
+sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-models verify \
   --manifest /etc/proctoring/model-weights.json
-sudo -u proctoring /opt/proctoring/current/.venv/bin/proctoring-benchmark
+sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-benchmark \
+  --manifest /etc/proctoring/model-weights.json \
+  --corpus-dir /var/lib/proctoring/benchmark-corpus \
+  --samples 100
 """, table=(["Analisis", "Regla"], [
     ("Identidad", "SFace con YuNet, coseno y umbral registrado por check."),
     ("Liveness", "FasNet valido en tres capturas y centro-giro-centro en servidor."),
@@ -466,8 +473,8 @@ sudo systemctl enable --now proctoring-api proctoring-worker
     "La purga de staging elimina solo objetos vencidos sin referencia durable.",
     "La retencion elimina objetos y registra auditoria.",
   ], commands="""
-sudo -u proctoring /opt/proctoring/current/.venv/bin/proctoring-purge-staging
-sudo -u proctoring /opt/proctoring/current/.venv/bin/proctoring-purge
+sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-purge-staging
+sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-purge
 """)
 
   section(document, "12. Operacion y rollback", "Revise servicios, readiness, timers, cola y almacenamiento antes de habilitar examenes.", commands="""
@@ -480,7 +487,7 @@ sudo bash scripts/rollback-ubuntu.sh /opt/proctoring/releases/RELEASE_ANTERIOR
 
   section(document, "13. Pruebas y aceptacion", "La aceptacion real se ejecuta en Ubuntu con MariaDB, S3 y pesos aprobados.", commands="""
 cd /opt/proctoring/current/apps/api
-.venv/bin/python -m pytest
+/opt/proctoring/current/venv/bin/python -m pytest
 proctoring-check-infra
 proctoring-fixtures
 proctoring-load

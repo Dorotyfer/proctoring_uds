@@ -1,9 +1,13 @@
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import sys
 
-from proctoring.benchmark import BenchmarkSample, build_benchmark_report
+from PIL import Image
+import pytest
+
+from proctoring.benchmark import BenchmarkSample, build_benchmark_report, run_verified_benchmark
 from proctoring.model_runtime import LocalModelBundle
 from proctoring.models_cli import main
 
@@ -80,3 +84,60 @@ def test_benchmark_reports_capacity_formula_and_invalidates_fake_runs_for_sla() 
   assert report["workersFor15JobsPerSecond"] == 15
   assert report["slaValid"] is False
   assert report["slaValidity"] == "invalid_fake_or_missing_weights"
+
+
+def test_verified_benchmark_preloads_models_and_runs_mixed_workload(tmp_path: Path) -> None:
+  corpus = tmp_path / "corpus"
+  corpus.mkdir()
+  output = BytesIO()
+  Image.new("RGB", (320, 240), "white").save(output, format="JPEG")
+  (corpus / "authorized.jpg").write_bytes(output.getvalue())
+  calls: list[tuple[str, bytes] | str] = []
+
+  class FaceAdapter:
+    def analyze(self, frame: bytes) -> object:
+      calls.append(("face", frame))
+      return object()
+
+  class ObjectAdapter:
+    def detect(self, frame: bytes) -> tuple[object, ...]:
+      calls.append(("objects", frame))
+      return ()
+
+  class Bundle:
+    deepface_adapter = FaceAdapter()
+    ssdlite_adapter = ObjectAdapter()
+
+    def preload(self) -> None:
+      calls.append("preload")
+
+  clock = iter([0.0, 0.0, 0.1, 0.1, 0.3, 0.3])
+  report = run_verified_benchmark(
+    tmp_path / "manifest.json",
+    corpus,
+    sample_count=2,
+    bundle_factory=lambda _: Bundle(),
+    clock=lambda: next(clock),
+    peak_ram_mb=lambda: 640.0,
+  )
+
+  assert calls[0] == "preload"
+  assert [call[0] for call in calls[1:] if isinstance(call, tuple)] == [
+    "face", "objects", "face", "objects"
+  ]
+  assert report["mixedJobs"] == 2
+  assert report["mixedThroughputPerWorker"] == 6.666667
+  assert report["p95LatencyMs"] == pytest.approx(200)
+  assert report["peakRamMb"] == 640.0
+  assert report["workersFor15JobsPerSecond"] == 3
+  assert report["slaValid"] is True
+  assert report["slaValidity"] == "valid_local_verified_weights"
+
+
+def test_verified_benchmark_rejects_an_empty_or_invalid_corpus(tmp_path: Path) -> None:
+  corpus = tmp_path / "corpus"
+  corpus.mkdir()
+  (corpus / "invalid.jpg").write_bytes(b"not-a-jpeg")
+
+  with pytest.raises(ValueError, match="^Benchmark corpus is invalid$"):
+    run_verified_benchmark(tmp_path / "manifest.json", corpus, sample_count=1)

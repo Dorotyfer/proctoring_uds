@@ -7,7 +7,7 @@ from typing import Any
 
 from proctoring.config import Settings
 from proctoring.main import create_runtime_dependencies
-from proctoring.model_runtime import LocalModelBundle
+from proctoring.model_runtime import LocalModelBundle, REQUIRED_WORKER_MODEL_IDS
 from proctoring.repositories.effects import SqlAnalysisEffectsRepository
 from proctoring.repositories.monitoring import SqlMonitoringRepository
 from proctoring.repositories.sface import SqlSFaceProfileRepository
@@ -62,10 +62,10 @@ async def run_worker(*, once: bool = False) -> None:
     queue = dependencies.analyses
     if queue is None:
       raise RuntimeError("Analysis queue unavailable")
-    models = LocalModelBundle(settings.model_manifest_path, required_model_ids=frozenset({
-      "opencv-face-detection-yunet-2023mar", "deepface-sface", "deepface-fasnet-v2",
-      "deepface-fasnet-v1se", "torchvision-ssdlite320-mobilenet-v3-large",
-    }))
+    models = LocalModelBundle(
+      settings.model_manifest_path,
+      required_model_ids=REQUIRED_WORKER_MODEL_IDS,
+    )
     monitoring_repository = SqlMonitoringRepository(dependencies.engine)
     sface_repository = SqlSFaceProfileRepository(dependencies.engine)
     cipher = DescriptorCipher(settings.biometric_encryption_key_bytes)
