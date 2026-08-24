@@ -21,6 +21,7 @@ from proctoring_api.services.events import (
 )
 from proctoring_api.services.sessions import SessionService
 from proctoring_api.models import CreateSessionInput
+from proctoring_api.config import canonical_http_origin
 
 
 class HealthService(Protocol):
@@ -57,8 +58,9 @@ def create_app(
   app.state.evidence_service = evidence_service
   app.state.evidence_repository = evidence_repository
   app.state.object_storage = object_storage
-  if web_origin:
-    app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=True,
+  canonical_web_origin = canonical_http_origin(web_origin) if web_origin else None
+  if canonical_web_origin:
+    app.add_middleware(CORSMiddleware, allow_origins=[canonical_web_origin], allow_credentials=True,
       allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"])
 
   @app.exception_handler(HTTPException)
@@ -97,10 +99,10 @@ def create_app(
     _register_task_two_routes(
       app, session_service, event_service, jwt_secret, moodle_integration_key
     )
-  if panel_repository and evidence_service and jwt_secret and panel_sso_secret and web_origin and api_public_url:
+  if panel_repository and evidence_service and jwt_secret and panel_sso_secret and canonical_web_origin and api_public_url:
     from proctoring_api.panel_routes import register_panel_routes
     app.include_router(register_panel_routes(panel_repository, evidence_service, biometric_profile_repository,
-      jwt_secret=jwt_secret, panel_sso_secret=panel_sso_secret, web_origin=web_origin,
+      jwt_secret=jwt_secret, panel_sso_secret=panel_sso_secret, web_origin=canonical_web_origin,
       api_public_url=api_public_url))
   return app
 

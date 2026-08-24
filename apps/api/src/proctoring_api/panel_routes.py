@@ -2,7 +2,7 @@
 
 import hmac
 from typing import Annotated, Any
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -13,6 +13,7 @@ from proctoring_api.panel_auth import (
   can_view, can_view_evidence, decode_moodle_sso, decode_panel_session,
   is_course_authorized, issue_panel_session, panel_scope, review_scope
 )
+from proctoring_api.config import canonical_http_origin
 from proctoring_api.services.evidence import EvidenceAccessError, EvidenceNotFoundError
 
 
@@ -58,6 +59,7 @@ def register_panel_routes(
     response = RedirectResponse(returnUrl, status_code=302)
     response.set_cookie(COOKIE_NAME, issue_panel_session(claims, jwt_secret), max_age=COOKIE_MAX_AGE_SECONDS,
       httponly=True, secure=True, samesite="lax", path="/")
+    _protect_bearer_response(response)
     return response
 
   @router.post("/v1/panel/logout", status_code=204)
@@ -125,7 +127,7 @@ def register_panel_routes(
         request.headers.get("user-agent"))
     except EvidenceAccessError:
       return JSONResponse(status_code=404, content={"error": "Evidence not found"})
-    return {"url": f"{api_public_url.rstrip('/')}/v1/panel/evidence/{evidence_id}/content?accessToken={quote(token, safe='')}"}
+    return JSONResponse(content={"url": f"{api_public_url.rstrip('/')}/v1/panel/evidence/{evidence_id}/content?accessToken={quote(token, safe='')}"}, headers=_bearer_headers())
 
   @router.get("/v1/panel/evidence/{evidence_id}/content")
   async def evidence_content(evidence_id: str, accessToken: str | None = None, request: Request = None):
@@ -133,11 +135,11 @@ def register_panel_routes(
       return JSONResponse(status_code=401, content={"error": "Invalid or expired evidence access token"})
     try:
       content = await evidence_service.read_content(evidence_id, accessToken, ip_address=request.client.host if request and request.client else None, user_agent=request.headers.get("user-agent") if request else None)
-      return Response(content=content.body, media_type=content.headers.get("Content-Type"), headers=content.headers)
+      return Response(content=content.body, media_type=content.headers.get("Content-Type"), headers=content.headers | {"Referrer-Policy": "no-referrer"})
     except EvidenceNotFoundError:
-      return JSONResponse(status_code=404, content={"error": "Evidence not found"})
+      return JSONResponse(status_code=404, content={"error": "Evidence not found"}, headers=_bearer_headers())
     except EvidenceAccessError:
-      return JSONResponse(status_code=401, content={"error": "Invalid or expired evidence access token"})
+      return JSONResponse(status_code=401, content={"error": "Invalid or expired evidence access token"}, headers=_bearer_headers())
 
   @router.post("/v1/panel/biometric-profiles/{moodle_user_id}/reset")
   async def biometric_reset(moodle_user_id: str, claims: Annotated[PanelClaims, Depends(csrf_user)]):
@@ -154,9 +156,18 @@ def register_panel_routes(
 def _safe_return_url(value: str | None, web_origin: str) -> bool:
   if not value:
     return False
-  parsed = urlsplit(value)
-  origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
-  return bool(parsed.scheme in {"https", "http"} and parsed.netloc and origin == web_origin)
+  try:
+    return canonical_http_origin(value) == web_origin
+  except ValueError:
+    return False
+
+
+def _bearer_headers() -> dict[str, str]:
+  return {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+
+
+def _protect_bearer_response(response: Response) -> None:
+  response.headers.update(_bearer_headers())
 
 
 def _pagination(query: str, page: int, page_size: int) -> dict[str, Any] | None:

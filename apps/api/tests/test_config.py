@@ -57,6 +57,31 @@ def test_settings_normalize_public_and_storage_urls() -> None:
   assert settings.model_manifest_path == Path("/etc/proctoring/model-weights.json")
 
 
+@pytest.mark.parametrize(("origin", "expected"), [
+  ("HTTPS://PANEL.Example.EDU:443/path", "https://panel.example.edu"),
+  ("http://PANEL.example.edu:80", "http://panel.example.edu"),
+  ("https://PANEL.example.edu:8443", "https://panel.example.edu:8443"),
+  ("https://[2001:0DB8:0:0:0:0:0:1]:443", "https://[2001:db8::1]")
+])
+def test_settings_canonicalize_web_origin_like_browser_origin_serialization(origin: str, expected: str) -> None:
+  environment = valid_environment()
+  environment["WEB_ORIGIN"] = origin
+
+  assert Settings.from_environment(environment).web_origin == expected
+
+
+def test_settings_canonicalize_the_origins_of_all_configured_http_urls() -> None:
+  environment = valid_environment()
+  environment["API_PUBLIC_URL"] = "HTTPS://API.Example.EDU:443/proctoring"
+  environment["S3_ENDPOINT"] = "http://S3.Example.EDU:8080/storage"
+
+  settings = Settings.from_environment(environment)
+
+  assert settings.api_base_url == "https://api.example.edu/proctoring"
+  assert settings.api_origin == "https://api.example.edu"
+  assert settings.s3_endpoint == "http://s3.example.edu:8080/storage"
+
+
 def test_settings_reject_a_non_mysql_database_url() -> None:
   environment = valid_environment()
   environment["DATABASE_URL"] = "postgresql://service:password@127.0.0.1/proctoring"

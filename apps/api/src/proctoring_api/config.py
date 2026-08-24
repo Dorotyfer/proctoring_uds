@@ -6,7 +6,7 @@ import ipaddress
 import os
 from pathlib import Path
 from typing import Mapping
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -107,12 +107,40 @@ def _absolute_http_url(value: str) -> str:
     raise ValueError("must not include credentials")
   if parsed.query or parsed.fragment:
     raise ValueError("must not include a query or fragment")
-  return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
+  return f"{_canonical_origin_from_parsed(parsed)}{parsed.path}"
 
 
 def _origin(value: str) -> str:
-  parsed = urlsplit(_absolute_http_url(value))
-  return urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+  return canonical_http_origin(value)
+
+
+def canonical_http_origin(value: str) -> str:
+  """Serialize an HTTP(S) origin exactly as browsers send the Origin header."""
+
+  parsed = _parse_network_url(value, "HTTP(S) URL")
+  if parsed.scheme not in {"http", "https"}:
+    raise ValueError("must be an absolute HTTP(S) URL")
+  if parsed.username is not None or parsed.password is not None:
+    raise ValueError("must not include credentials")
+  if parsed.query or parsed.fragment:
+    raise ValueError("must not include a query or fragment")
+  return _canonical_origin_from_parsed(parsed)
+
+
+def _canonical_origin_from_parsed(parsed) -> str:
+  scheme = parsed.scheme.lower()
+  hostname = parsed.hostname
+  if hostname is None:
+    raise ValueError("must be an absolute HTTP(S) URL")
+  try:
+    host = ipaddress.ip_address(hostname).compressed
+  except ValueError:
+    host = hostname.encode("idna").decode("ascii").lower()
+  authority = f"[{host}]" if ":" in host else host
+  port = parsed.port
+  if port is not None and port != (443 if scheme == "https" else 80):
+    authority = f"{authority}:{port}"
+  return f"{scheme}://{authority}"
 
 
 def _validate_database_url(value: str) -> None:

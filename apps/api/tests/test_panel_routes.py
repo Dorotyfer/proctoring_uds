@@ -65,12 +65,12 @@ def moodle_token(capabilities=None, **changes):
   return jwt.encode(payload, PANEL_SECRET, algorithm="HS256")
 
 
-def client(evidence_override=None):
+def client(evidence_override=None, web_origin=WEB_ORIGIN):
   repository = PanelRepository()
   evidence = evidence_override or EvidenceService()
   app = create_app(Available(), panel_repository=repository, evidence_service=evidence,
     biometric_profile_repository=BiometricRepository(), jwt_secret=JWT_SECRET,
-    panel_sso_secret=PANEL_SECRET, web_origin=WEB_ORIGIN, api_public_url="https://api.example.edu/proctoring-api")
+    panel_sso_secret=PANEL_SECRET, web_origin=web_origin, api_public_url="https://api.example.edu/proctoring-api")
   return TestClient(app, base_url="https://api.example.edu"), repository, evidence
 
 
@@ -97,6 +97,8 @@ def test_sso_sets_a_fixed_secure_lax_http_only_cookie_and_rejects_open_redirects
   cookie = login.headers["set-cookie"]
   assert "HttpOnly" in cookie and "Secure" in cookie and "SameSite=lax" in cookie
   assert "Path=/" in cookie and "Max-Age=1800" in cookie
+  assert login.headers["referrer-policy"] == "no-referrer"
+  assert login.headers["cache-control"] == "no-store"
   assert rejected.status_code == 400
   assert rejected.json() == {"error": "Invalid panel sign-in request"}
 
@@ -141,6 +143,28 @@ def test_mutations_require_exact_origin_and_constant_time_csrf_then_enforce_capa
   assert repository.calls[-1][-1] == {"courseIds": ["course-a"], "institutional": False}
 
 
+def test_canonical_origin_drives_cors_sso_csrf_and_the_complete_panel_client_sequence() -> None:
+  canonical_origin = "https://panel.example.edu"
+  http, repository, _ = client(web_origin="HTTPS://PANEL.Example.EDU:443")
+  login = http.get("/v1/panel/sso", params={
+    "token": moodle_token(["local/proctoring:viewowncoursereports", "local/proctoring:reviewowncoursealerts"]),
+    "returnUrl": "https://PANEL.example.edu:443/panel"
+  }, follow_redirects=False)
+  cors = http.options("/v1/panel/alerts/11111111-1111-4111-8111-111111111111/review", headers={
+    "Origin": canonical_origin, "Access-Control-Request-Method": "POST",
+    "Access-Control-Request-Headers": "X-CSRF-Token, Content-Type"
+  })
+  profile = http.get("/v1/panel/me")
+  review = http.post("/v1/panel/alerts/11111111-1111-4111-8111-111111111111/review", headers={
+    "Origin": canonical_origin, "X-CSRF-Token": profile.json()["csrfToken"]
+  }, json={"status": "reviewed", "note": "client sequence"})
+
+  assert login.status_code == 302
+  assert cors.headers["access-control-allow-origin"] == canonical_origin
+  assert profile.status_code == review.status_code == 200
+  assert repository.calls[-1][0] == "review"
+
+
 def test_evidence_access_and_content_are_scoped_and_content_is_safe() -> None:
   http, _, evidence = client()
   sign_in(http, ["local/proctoring:viewowncoursereports", "local/proctoring:viewbiometricevidence"])
@@ -154,6 +178,9 @@ def test_evidence_access_and_content_are_scoped_and_content_is_safe() -> None:
   assert content.status_code == 200 and content.content == b"image"
   assert content.headers["cache-control"] == "private, no-store"
   assert content.headers["x-content-type-options"] == "nosniff"
+  assert access.headers["cache-control"] == "no-store"
+  assert access.headers["referrer-policy"] == "no-referrer"
+  assert content.headers["referrer-policy"] == "no-referrer"
   assert evidence.calls[0][0] == "issue" and evidence.calls[1][0] == "read"
 
 
@@ -183,4 +210,6 @@ def test_biometric_reset_and_logout_are_csrf_protected() -> None:
   assert reset.status_code == 200
   assert reset.json()["biometric"]["state"] == "revoked"
   assert logout.status_code == 204
-  assert "Max-Age=0" in logout.headers["set-cookie"]
+  cookie = logout.headers["set-cookie"]
+  assert "Max-Age=0" in cookie and "Path=/" in cookie
+  assert "HttpOnly" in cookie and "Secure" in cookie and "SameSite=lax" in cookie
