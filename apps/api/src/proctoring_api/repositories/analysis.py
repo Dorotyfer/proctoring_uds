@@ -43,14 +43,18 @@ class SqlAnalysisRepository:
 
   async def enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     async with self._engine.begin() as connection:
+      await self._lock_session(connection, input_data["sessionId"])
+      await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
       existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
       if existing:
         return _job(existing), False
-      await self._check_capacity(connection, input_data["sessionId"], input_data["type"])
+      await self._check_capacity(connection, input_data["sessionId"], input_data["type"], input_data["now"])
       return await self._insert_job(connection, input_data)
 
   async def consume_challenge_and_enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     async with self._engine.begin() as connection:
+      await self._lock_session(connection, input_data["sessionId"])
+      await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
       existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
       if existing:
         return _job(existing), False
@@ -61,7 +65,7 @@ class SqlAnalysisRepository:
       row = challenge.mappings().first()
       if not row or row["used_at"] is not None or row["expires_at"].replace(tzinfo=UTC) <= input_data["now"]:
         raise ChallengeExpiredError("Challenge is used or expired")
-      await self._check_capacity(connection, input_data["sessionId"], "preparation")
+      await self._check_capacity(connection, input_data["sessionId"], "preparation", input_data["now"])
       job, created = await self._insert_job(connection, input_data)
       if not created:
         return job, False
@@ -103,14 +107,14 @@ class SqlAnalysisRepository:
     async with self._engine.begin() as connection:
       result = await connection.execute(text("""
         UPDATE proctoring_analysis_jobs SET lease_expires_at = :lease_expires_at
-        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token
+        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token AND lease_expires_at > :now
           AND lease_expires_at > :now
       """), {"id": job_id, "owner_token": owner_token, "now": now, "lease_expires_at": now + timedelta(seconds=LEASE_SECONDS)})
       return result.rowcount == 1
 
   async def complete(self, job_id: str, owner_token: str, result_data: dict[str, Any], now: datetime | None = None) -> bool:
     now = now or datetime.now(UTC)
-    _safe_result(result_data)
+    result_data = _safe_result(result_data)
     async with self._engine.begin() as connection:
       result = await connection.execute(text("""
         UPDATE proctoring_analysis_jobs
@@ -127,8 +131,8 @@ class SqlAnalysisRepository:
     async with self._engine.begin() as connection:
       job = await connection.execute(text("""
         SELECT id, attempt_count FROM proctoring_analysis_jobs
-        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token FOR UPDATE
-      """), {"id": job_id, "owner_token": owner_token})
+        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token AND lease_expires_at > :now FOR UPDATE
+      """), {"id": job_id, "owner_token": owner_token, "now": now})
       row = job.mappings().first()
       if not row:
         return False
@@ -139,7 +143,7 @@ class SqlAnalysisRepository:
         UPDATE proctoring_analysis_jobs
         SET state = :state, available_at = :available_at, last_error_code = :error_code,
           completed_at = IF(:state = 'failed', :now, completed_at), lease_owner_token = NULL, lease_expires_at = NULL
-        WHERE id = :id AND lease_owner_token = :owner_token
+        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token AND lease_expires_at > :now
       """), {"state": state, "available_at": available_at, "error_code": error_code, "now": now,
         "id": job_id, "owner_token": owner_token})
       return True
@@ -164,11 +168,12 @@ class SqlAnalysisRepository:
     """), {"session_id": session_id, "analysis_id": analysis_id})
     return result.mappings().first()
 
-  async def _check_capacity(self, connection: Any, session_id: str, job_type: str) -> None:
+  async def _check_capacity(self, connection: Any, session_id: str, job_type: str, now: datetime) -> None:
     result = await connection.execute(text("""
       SELECT id FROM proctoring_analysis_jobs
-      WHERE session_id = :session_id AND type = :type AND state IN ('queued', 'processing') FOR UPDATE
-    """), {"session_id": session_id, "type": job_type})
+      WHERE session_id = :session_id AND type = :type AND state IN ('queued', 'processing')
+        AND (type <> 'monitoring' OR created_at > :stale_before) FOR UPDATE
+    """), {"session_id": session_id, "type": job_type, "stale_before": now - MONITORING_EXPIRY})
     if len(result.mappings().all()) >= (1 if job_type == "preparation" else 2):
       raise AnalysisCapacityError(10)
 
@@ -205,11 +210,22 @@ class SqlAnalysisRepository:
       WHERE state = 'processing' AND lease_expires_at <= :now
     """), {"now": now, "max_attempts": MAX_ATTEMPTS})
 
+  async def _lock_session(self, connection: Any, session_id: str) -> None:
+    await connection.execute(text("SELECT id FROM proctoring_sessions WHERE id = :session_id FOR UPDATE"), {"session_id": session_id})
+
+  async def _expire_stale_monitoring(self, connection: Any, session_id: str, now: datetime) -> None:
+    await connection.execute(text("""
+      UPDATE proctoring_analysis_jobs SET state = 'expired', completed_at = :now
+      WHERE session_id = :session_id AND type = 'monitoring' AND state = 'queued' AND created_at <= :stale_before
+    """), {"session_id": session_id, "now": now, "stale_before": now - MONITORING_EXPIRY})
+
 
 def _job(row: Any) -> dict[str, Any]:
   result = row.get("result") if hasattr(row, "get") else None
   if isinstance(result, str):
     result = json.loads(result)
+  if result is not None:
+    result = _safe_result(result)
   return {"id": str(row["id"]), "analysisId": str(row["analysis_id"]), "sessionId": str(row["session_id"]),
     "type": row["type"], "state": row["state"], "attempts": int(row.get("attempt_count", 0)),
     "result": result, "createdAt": row.get("created_at"), "completedAt": row.get("completed_at")}
@@ -219,8 +235,14 @@ def _job_select(condition: str) -> str:
   return f"SELECT * FROM proctoring_analysis_jobs WHERE {condition}"
 
 
-def _safe_result(value: dict[str, Any]) -> None:
-  serialized = json.dumps(value)
-  forbidden = ("jpeg", "image", "embedding", "descriptor", "ciphertext", "base64")
-  if not isinstance(value, dict) or len(serialized) > 8192 or any(word in serialized.lower() for word in forbidden):
+def _safe_result(value: dict[str, Any]) -> dict[str, Any]:
+  if not isinstance(value, dict):
     raise ValueError("Invalid analysis result")
+  keys = set(value)
+  preparation = {"liveness", "identity", "profileVersion"}
+  monitoring = {"face", "alert"}
+  if keys == preparation and isinstance(value["liveness"], str) and isinstance(value["identity"], str) and isinstance(value["profileVersion"], int):
+    return {"liveness": value["liveness"], "identity": value["identity"], "profileVersion": value["profileVersion"]}
+  if keys == monitoring and value["face"] in {"present", "absent", "multiple"} and isinstance(value["alert"], bool):
+    return {"face": value["face"], "alert": value["alert"]}
+  raise ValueError("Invalid analysis result")

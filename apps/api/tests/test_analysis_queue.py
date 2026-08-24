@@ -11,6 +11,7 @@ from proctoring_api.services.analysis import (
   ChallengeExpiredError,
   ImageValidationError,
   validate_jpeg,
+  read_bounded_upload,
 )
 
 
@@ -34,6 +35,25 @@ def test_validate_jpeg_returns_bounded_decoded_dimensions_and_hash() -> None:
   assert validated.height == 480
   assert validated.byte_size > 0
   assert len(validated.sha256) == 64
+
+
+class ChunkedUpload:
+  def __init__(self, payload): self.payload, self.offset = payload, 0
+  async def read(self, size):
+    value = self.payload[self.offset:self.offset + size]
+    self.offset += len(value)
+    return value
+
+
+def test_streaming_upload_stops_after_jpeg_limit_without_unbounded_read() -> None:
+  with pytest.raises(ImageValidationError):
+    asyncio.run(read_bounded_upload(ChunkedUpload(b"x" * (200 * 1024 + 1))))
+
+
+def test_challenge_uses_cryptographically_selected_turn_direction() -> None:
+  service = AnalysisQueueService(MemoryRepository(), MemoryStorage(), bytes(32), turn_chooser=lambda: "turn-left")
+  challenge = asyncio.run(service.issue_challenge("session-1"))
+  assert challenge["steps"] == ["center", "turn-left", "center"]
 
 
 class MemoryRepository:

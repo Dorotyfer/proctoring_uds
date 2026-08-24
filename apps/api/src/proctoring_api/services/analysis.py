@@ -16,6 +16,7 @@ MAX_JPEG_BYTES = 200 * 1024
 MIN_WIDTH, MIN_HEIGHT = 320, 240
 MAX_WIDTH, MAX_HEIGHT = 1280, 720
 CHALLENGE_TTL = timedelta(seconds=120)
+MAX_JPEG_PIXELS = MAX_WIDTH * MAX_HEIGHT
 
 
 class ImageValidationError(ValueError):
@@ -69,6 +70,9 @@ def validate_jpeg(data: bytes, content_type: str | None) -> ValidatedJpeg:
     with Image.open(BytesIO(data)) as image:
       if image.format != "JPEG":
         raise ImageValidationError("Invalid JPEG upload")
+      width, height = image.size
+      if not MIN_WIDTH <= width <= MAX_WIDTH or not MIN_HEIGHT <= height <= MAX_HEIGHT or width * height > MAX_JPEG_PIXELS:
+        raise ImageValidationError("Invalid JPEG upload")
       image.verify()
     with Image.open(BytesIO(data)) as image:
       image.load()
@@ -80,6 +84,21 @@ def validate_jpeg(data: bytes, content_type: str | None) -> ValidatedJpeg:
   return ValidatedJpeg(data, len(data), width, height, sha256(data).hexdigest())
 
 
+async def read_bounded_upload(upload: Any) -> bytes:
+  """Read multipart input in bounded chunks before image validation."""
+  chunks: list[bytes] = []
+  size = 0
+  while True:
+    chunk = await upload.read(64 * 1024)
+    if not chunk:
+      break
+    size += len(chunk)
+    if size > MAX_JPEG_BYTES:
+      raise ImageValidationError("Invalid JPEG upload")
+    chunks.append(chunk)
+  return b"".join(chunks)
+
+
 class AnalysisQueueService:
   """Stages encrypted JPEGs before a repository atomically exposes a durable job."""
 
@@ -89,20 +108,23 @@ class AnalysisQueueService:
     storage: EncryptedObjectStorage,
     encryption_key: bytes,
     *,
-    now: Callable[[], datetime] | None = None
+    now: Callable[[], datetime] | None = None,
+    turn_chooser: Callable[[], str] | None = None
   ) -> None:
     self._repository = repository
     self._storage = storage
     self._crypto = EvidenceEncryptionService(encryption_key)
     self._now = now or (lambda: datetime.now(UTC))
+    self._turn_chooser = turn_chooser or _random_turn
 
   async def issue_challenge(self, session_id: str) -> dict[str, Any]:
     challenge_id = str(uuid4())
     expires_at = self._now() + CHALLENGE_TTL
-    challenge = await self._repository.create_challenge(
-      session_id, challenge_id, ["center", "turn", "center"], expires_at
-    )
-    return {"id": challenge_id, "steps": ["center", "turn", "center"], "expiresAt": expires_at}
+    steps = ["center", self._turn_chooser(), "center"]
+    if steps[1] not in {"turn-left", "turn-right"}:
+      raise ValueError("Invalid liveness challenge")
+    await self._repository.create_challenge(session_id, challenge_id, steps, expires_at)
+    return {"id": challenge_id, "steps": steps, "expiresAt": expires_at}
 
   async def enqueue_preparation(
     self, session_id: str, analysis_id: str, consent_accepted: bool, challenge_id: str, frames: list[bytes],
@@ -122,8 +144,7 @@ class AnalysisQueueService:
         "consentAccepted": True, "frames": uploads, "now": self._now()
       })
     except Exception:
-      await self._delete_uploads(uploads)
-      raise
+      return await self._recover_enqueue(session_id, analysis_id, uploads)
     if not created:
       await self._delete_uploads(uploads)
     return job
@@ -141,8 +162,7 @@ class AnalysisQueueService:
         "now": self._now()
       })
     except Exception:
-      await self._delete_uploads(uploads)
-      raise
+      return await self._recover_enqueue(session_id, analysis_id, uploads)
     if not created:
       await self._delete_uploads(uploads)
     return job
@@ -182,6 +202,27 @@ class AnalysisQueueService:
     for upload in uploads:
       try:
         await self._storage.delete(upload["objectKey"])
-      except Exception:
-        # A cleanup worker can safely retry orphan staging keys; do not replace the original error.
-        pass
+      except Exception as error:
+        raise StagingCleanupError(upload["objectKey"]) from error
+
+  async def _recover_enqueue(self, session_id: str, analysis_id: str, uploads: list[dict[str, Any]]) -> dict[str, Any]:
+    """Resolve acknowledged-late commits without deleting possible canonical frame objects."""
+    canonical = await self._repository.get_job(session_id, analysis_id)
+    if canonical:
+      # A committed transaction may reference these keys even when its acknowledgement was lost.
+      # Retention cleanup discovers the staging prefix later rather than risking canonical data.
+      return canonical
+    await self._delete_uploads(uploads)
+    raise RuntimeError("Analysis enqueue unavailable")
+
+
+class StagingCleanupError(RuntimeError):
+  """Safe staging identifier for retryable cleanup; no image data is exposed."""
+
+  def __init__(self, object_key: str) -> None:
+    super().__init__(f"Staging cleanup pending: {object_key}")
+
+
+def _random_turn() -> str:
+  from secrets import choice
+  return choice(("turn-left", "turn-right"))

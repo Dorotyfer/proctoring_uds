@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS proctoring_liveness_challenges_session_idx
 
 CREATE TABLE IF NOT EXISTS proctoring_analysis_jobs (
   id CHAR(36) PRIMARY KEY,
-  analysis_id CHAR(36) NOT NULL UNIQUE,
+  analysis_id CHAR(36) NOT NULL,
   session_id CHAR(36) NOT NULL,
   type VARCHAR(20) NOT NULL,
   state VARCHAR(20) NOT NULL DEFAULT 'queued',
@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS proctoring_analysis_jobs (
   CONSTRAINT proctoring_analysis_jobs_state_check CHECK (state IN ('queued', 'processing', 'completed', 'failed', 'expired')),
   CONSTRAINT proctoring_analysis_jobs_attempt_count_check CHECK (attempt_count <= 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE UNIQUE INDEX IF NOT EXISTS proctoring_analysis_jobs_session_analysis_unique
+  ON proctoring_analysis_jobs (session_id, analysis_id);
 
 CREATE INDEX IF NOT EXISTS proctoring_analysis_jobs_claim_idx
   ON proctoring_analysis_jobs (state, available_at, created_at);
@@ -69,7 +72,12 @@ CREATE TABLE IF NOT EXISTS proctoring_model_audit (
   model_name VARCHAR(128) NOT NULL,
   model_version VARCHAR(128) NOT NULL,
   action VARCHAR(32) NOT NULL,
-  metadata JSON NOT NULL,
+  detector_name VARCHAR(128) NOT NULL,
+  detector_version VARCHAR(128) NOT NULL,
+  metric_name VARCHAR(64) NOT NULL,
+  threshold DECIMAL(10,6) NULL,
+  latency_ms INT UNSIGNED NULL,
+  outcome VARCHAR(32) NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   CONSTRAINT proctoring_model_audit_job_fk
     FOREIGN KEY (job_id) REFERENCES proctoring_analysis_jobs(id) ON DELETE SET NULL,
@@ -80,7 +88,7 @@ CREATE TABLE IF NOT EXISTS proctoring_sface_profiles (
   id CHAR(36) PRIMARY KEY,
   legacy_profile_id CHAR(36) NULL UNIQUE,
   moodle_user_id VARCHAR(255) NOT NULL,
-  algorithm VARCHAR(64) NOT NULL DEFAULT 'SFace',
+  algorithm VARCHAR(64) NOT NULL,
   descriptor_ciphertext LONGBLOB NOT NULL,
   descriptor_length SMALLINT UNSIGNED NOT NULL,
   encryption_iv VARBINARY(16) NOT NULL,
@@ -92,10 +100,11 @@ CREATE TABLE IF NOT EXISTS proctoring_sface_profiles (
   enrolled_at DATETIME(3) NOT NULL,
   revoked_at DATETIME(3) NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  active_moodle_user_id VARCHAR(255) AS (IF(status = 'active', moodle_user_id, NULL)) STORED,
+  active_moodle_user_id VARCHAR(255) AS (IF(status = 'active' AND algorithm = 'SFace', moodle_user_id, NULL)) STORED,
   UNIQUE KEY proctoring_sface_profiles_one_active_user (active_moodle_user_id),
   CONSTRAINT proctoring_sface_profiles_status_check CHECK (status IN ('active', 'revoked')),
-  CONSTRAINT proctoring_sface_profiles_algorithm_check CHECK (algorithm = 'SFace')
+  CONSTRAINT proctoring_sface_profiles_algorithm_check CHECK (algorithm IN ('SFace', 'Human')),
+  CONSTRAINT proctoring_sface_profiles_active_algorithm_check CHECK (status <> 'active' OR algorithm = 'SFace')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX IF NOT EXISTS proctoring_sface_profiles_user_history_idx
@@ -126,7 +135,7 @@ INSERT INTO proctoring_sface_profiles (
   enrolled_at, revoked_at, created_at
 )
 SELECT
-  legacy.id, legacy.id, legacy.moodle_user_id, 'SFace', legacy.descriptor_ciphertext, legacy.descriptor_length,
+  legacy.id, legacy.id, legacy.moodle_user_id, legacy.algorithm, legacy.descriptor_ciphertext, legacy.descriptor_length,
   legacy.encryption_iv, legacy.encryption_tag, legacy.enrollment_version, 'revoked', legacy.consent_version,
   legacy.consented_at, legacy.enrolled_at, COALESCE(legacy.revoked_at, UTC_TIMESTAMP(3)), legacy.created_at
 FROM proctoring_biometric_profiles legacy

@@ -106,8 +106,8 @@ def create_app(
     app.include_router(register_panel_routes(panel_repository, evidence_service, biometric_profile_repository,
       jwt_secret=jwt_secret, panel_sso_secret=panel_sso_secret, web_origin=canonical_web_origin,
       api_public_url=api_public_url))
-  if analysis_service and jwt_secret:
-    _register_analysis_routes(app, analysis_service, jwt_secret)
+  if analysis_service and jwt_secret and session_service:
+    _register_analysis_routes(app, analysis_service, session_service, jwt_secret)
   return app
 
 
@@ -281,16 +281,23 @@ def _zod_received_type(value: object) -> str:
   return type(value).__name__
 
 
-def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret: str) -> None:
+def _register_analysis_routes(app: FastAPI, analysis_service: object, session_service: SessionService, jwt_secret: str) -> None:
   """Browser-only staged analysis API. Images are consumed immediately and never logged."""
 
-  from proctoring_api.services.analysis import AnalysisCapacityError, ChallengeExpiredError, ConsentRequiredError, ImageValidationError
+  from proctoring_api.services.analysis import AnalysisCapacityError, ChallengeExpiredError, ConsentRequiredError, ImageValidationError, read_bounded_upload
 
   browser_auth = require_browser_claims(jwt_secret)
 
+  async def active(session_id: str, claims: dict) -> UUID | JSONResponse:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    if not await session_service.get_active(parsed_id):
+      return JSONResponse(status_code=409, content={"error": "Session is not active"})
+    return parsed_id
+
   @app.post("/v1/sessions/{session_id}/liveness-challenges", status_code=status.HTTP_201_CREATED)
   async def liveness_challenge(session_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
-    parsed_id = _require_browser_ownership(session_id, claims)
+    parsed_id = await active(session_id, claims)
+    if isinstance(parsed_id, JSONResponse): return parsed_id
     challenge = await analysis_service.issue_challenge(str(parsed_id))
     return {"challenge": challenge}
 
@@ -305,13 +312,14 @@ def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret
     center_end: Annotated[UploadFile, File(alias="centerEnd")],
     claims: Annotated[dict, Depends(browser_auth)]
   ) -> dict:
-    parsed_id = _require_browser_ownership(session_id, claims)
+    parsed_id = await active(session_id, claims)
+    if isinstance(parsed_id, JSONResponse): return parsed_id
     _parse_analysis_id(analysis_id)
     if consent_accepted != "true":
       return JSONResponse(status_code=400, content={"error": "Consent is required"})
     try:
       files = [center_start, turn, center_end]
-      frames = [await file.read() for file in files]
+      frames = [await read_bounded_upload(file) for file in files]
       analysis = await analysis_service.enqueue_preparation(str(parsed_id), analysis_id, True, challenge_id, frames,
         [file.content_type for file in files])
       return {"analysis": analysis}
@@ -331,10 +339,11 @@ def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret
     frame: Annotated[UploadFile, File()],
     claims: Annotated[dict, Depends(browser_auth)]
   ) -> dict:
-    parsed_id = _require_browser_ownership(session_id, claims)
+    parsed_id = await active(session_id, claims)
+    if isinstance(parsed_id, JSONResponse): return parsed_id
     _parse_analysis_id(analysis_id)
     try:
-      analysis = await analysis_service.enqueue_monitoring(str(parsed_id), analysis_id, await frame.read(), frame.content_type)
+      analysis = await analysis_service.enqueue_monitoring(str(parsed_id), analysis_id, await read_bounded_upload(frame), frame.content_type)
       return {"analysis": analysis}
     except ImageValidationError:
       return JSONResponse(status_code=400, content={"error": "Invalid JPEG upload"})
@@ -343,7 +352,8 @@ def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret
 
   @app.get("/v1/sessions/{session_id}/analyses/{analysis_id}")
   async def get_analysis(session_id: str, analysis_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
-    parsed_id = _require_browser_ownership(session_id, claims)
+    parsed_id = await active(session_id, claims)
+    if isinstance(parsed_id, JSONResponse): return parsed_id
     _parse_analysis_id(analysis_id)
     analysis = await analysis_service.get(str(parsed_id), analysis_id)
     if not analysis:
@@ -352,7 +362,8 @@ def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret
 
   @app.get("/v1/sessions/{session_id}/monitoring-status")
   async def get_monitoring_status(session_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
-    parsed_id = _require_browser_ownership(session_id, claims)
+    parsed_id = await active(session_id, claims)
+    if isinstance(parsed_id, JSONResponse): return parsed_id
     return await analysis_service.monitoring_status(str(parsed_id))
 
 

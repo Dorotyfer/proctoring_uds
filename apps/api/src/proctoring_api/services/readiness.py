@@ -10,11 +10,11 @@ class ReadinessDependency(Protocol):
 class QueueReadiness:
   """Checks durable queue reachability without claiming work."""
 
-  def __init__(self, repository: ReadinessDependency) -> None:
+  def __init__(self, repository: object) -> None:
     self._repository = repository
 
   async def check(self) -> None:
-    await self._repository.check()
+    await self._repository.ping()
 
 
 class ReadinessService:

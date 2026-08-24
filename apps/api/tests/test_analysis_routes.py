@@ -30,6 +30,14 @@ class AnalysisService:
     return {"lastProcessedAt": None, "availability": "available", "nextIntervalSeconds": 10}
 
 
+class Sessions:
+  async def get_active(self, _): return object()
+
+
+class InactiveSessions:
+  async def get_active(self, _): return None
+
+
 def image_bytes():
   output = BytesIO()
   Image.new("RGB", (320, 240), "white").save(output, format="JPEG")
@@ -37,7 +45,7 @@ def image_bytes():
 
 
 def test_browser_analysis_routes_require_session_owned_jwt_and_use_multipart_contract() -> None:
-  app = create_app(Available(), analysis_service=AnalysisService(), jwt_secret=SECRET)
+  app = create_app(Available(), analysis_service=AnalysisService(), session_service=Sessions(), jwt_secret=SECRET)
   token = issue_browser_token(SESSION_ID, "attempt-1", "browser", SECRET)
   headers = {"Authorization": f"Bearer {token}"}
   client = TestClient(app)
@@ -52,3 +60,11 @@ def test_browser_analysis_routes_require_session_owned_jwt_and_use_multipart_con
   assert response.status_code == 202
   assert response.json()["analysis"]["state"] == "queued"
   assert client.get(f"/v1/sessions/{SESSION_ID}/monitoring-status", headers=headers).json()["nextIntervalSeconds"] == 10
+
+
+def test_browser_analysis_routes_reject_inactive_session_before_any_enqueue() -> None:
+  app = create_app(Available(), analysis_service=AnalysisService(), session_service=InactiveSessions(), jwt_secret=SECRET)
+  token = issue_browser_token(SESSION_ID, "attempt-1", "browser", SECRET)
+  response = TestClient(app).post(f"/v1/sessions/{SESSION_ID}/liveness-challenges", headers={"Authorization": f"Bearer {token}"})
+  assert response.status_code == 409
+  assert response.json() == {"error": "Session is not active"}
