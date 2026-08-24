@@ -61,3 +61,13 @@ The existing MariaDB integration suite remains environment-gated by `TEST_DATABA
 - Gate 2: provision the S3/MinIO staging bucket and AES-256 evidence key before accepting upload traffic.
 - Gate 3: run worker claim/renew/complete/fail ownership coverage against MariaDB before enabling worker service.
 - Gate 4: Task 6 supplies inference and must use the worker cleanup seam; Task 7 supplies the browser UI.
+
+## Review round 1 corrections
+
+- Queue readiness now uses the durable repository `ping()` path. Analysis routes perform browser-JWT ownership followed by active-session validation and consistently return `409 Session is not active` before staging.
+- Enqueue transactions lock the parent session, expire stale monitoring work before capacity checks, and use the same stale predicate as monitoring status. Lease completion and failure require a live owner lease.
+- Multipart payloads use bounded chunk reads; JPEG header dimensions and a 1280×720 pixel ceiling are checked before full decode. Challenges persist center/cryptographic-left-or-right/center steps.
+- `009` now scopes idempotency to `(session_id, analysis_id)`, makes model audit fields explicit rather than arbitrary JSON, and copies the legacy Human algorithm unchanged into revoked history. Active profile enforcement remains SFace-only.
+- Result persistence and read projection use strict preparation or monitoring allowlists. Unknown/nested data is rejected. Commit-ack recovery queries the canonical job and preserves staging when acknowledgement ambiguity could otherwise delete referenced objects.
+
+Review verification: `& .\.venv\Scripts\python.exe -m pytest apps/api/tests -q` returned `155 passed, 3 skipped`; `git diff --check` passed. Code/test correction: `a7e7810`.
