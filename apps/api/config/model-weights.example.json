@@ -1,4 +1,5 @@
 {
+  "version": 1,
   "offlineOnly": true,
   "weightsDirectory": "/opt/proctoring/model-weights",
   "models": [
@@ -7,28 +8,28 @@
       "destination": "face_detection_yunet_2023mar.onnx",
       "source": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
       "sha256": null,
-      "status": "approval-required-before-offline-download"
+      "status": "unacquired-release-blocking"
     },
     {
       "id": "deepface-sface",
       "destination": "face_recognition_sface_2021dec.onnx",
       "source": "https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface",
       "sha256": null,
-      "status": "approval-required-before-offline-download"
+      "status": "unacquired-release-blocking"
     },
     {
       "id": "deepface-fasnet",
       "destination": "Fasnet.pth",
       "source": "https://github.com/serengil/deepface",
       "sha256": null,
-      "status": "approval-required-before-offline-download"
+      "status": "unacquired-release-blocking"
     },
     {
       "id": "torchvision-ssdlite320-mobilenet-v3-large",
       "destination": "ssdlite320_mobilenet_v3_large_coco-a79551df.pth",
       "source": "https://download.pytorch.org/models/ssdlite320_mobilenet_v3_large_coco-a79551df.pth",
       "sha256": null,
-      "status": "approval-required-before-offline-download"
+      "status": "unacquired-release-blocking"
     }
   ]
 }

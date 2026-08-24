@@ -1,4 +1,7 @@
 import base64
+import hashlib
+import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -51,7 +54,7 @@ def test_settings_normalize_public_and_storage_urls() -> None:
   assert settings.api_base_url == "https://api.proctoring.example.edu/api"
   assert settings.s3_endpoint == "https://s3.example.edu"
   assert settings.failure_policy.value == "block"
-  assert settings.model_downloads_allowed is False
+  assert settings.model_manifest_path == Path("/etc/proctoring/model-weights.json")
 
 
 def test_settings_reject_a_non_mysql_database_url() -> None:
@@ -60,3 +63,63 @@ def test_settings_reject_a_non_mysql_database_url() -> None:
 
   with pytest.raises(ValidationError, match="DATABASE_URL must use the mysql: scheme"):
     Settings.from_environment(environment)
+
+
+@pytest.mark.parametrize("setting, value", [
+  ("WEB_ORIGIN", "https://admin:secret@proctoring.example.edu"),
+  ("API_PUBLIC_URL", "https://api.proctoring.example.edu:not-a-port/api"),
+  ("S3_ENDPOINT", "https://s3.example.edu:70000"),
+  ("S3_ENDPOINT", "https://access:secret@s3.example.edu")
+])
+def test_settings_reject_insecure_or_malformed_public_urls(
+  setting: str,
+  value: str
+) -> None:
+  environment = valid_environment()
+  environment[setting] = value
+
+  with pytest.raises(ValidationError):
+    Settings.from_environment(environment)
+
+
+@pytest.mark.parametrize("database_url", [
+  "mysql://service:password@:3306/proctoring",
+  "mysql://service:password@database.example.edu:not-a-port/proctoring",
+  "mysql://service:password@database.example.edu:70000/proctoring"
+])
+def test_settings_reject_malformed_database_hosts_and_ports(database_url: str) -> None:
+  environment = valid_environment()
+  environment["DATABASE_URL"] = database_url
+
+  with pytest.raises(ValidationError):
+    Settings.from_environment(environment)
+
+
+def test_settings_require_approved_local_weights_when_inference_is_requested(tmp_path: Path) -> None:
+  environment = valid_environment()
+  environment["INFERENCE_REQUESTED"] = "true"
+  environment["MODEL_MANIFEST_PATH"] = str(tmp_path / "model-weights.json")
+
+  with pytest.raises(ValidationError, match="model manifest"):
+    Settings.from_environment(environment)
+
+  weights_directory = tmp_path / "weights"
+  weights_directory.mkdir()
+  artifact = weights_directory / "model.onnx"
+  artifact.write_bytes(b"approved-weight")
+  manifest_path = tmp_path / "model-weights.json"
+  manifest_path.write_text(json.dumps({
+    "version": 1,
+    "offlineOnly": True,
+    "weightsDirectory": str(weights_directory),
+    "models": [{
+      "id": "approved-model",
+      "destination": "model.onnx",
+      "sha256": hashlib.sha256(b"approved-weight").hexdigest(),
+      "status": "approved"
+    }]
+  }), encoding="utf-8")
+
+  settings = Settings.from_environment(environment)
+
+  assert settings.model_manifest_path == manifest_path

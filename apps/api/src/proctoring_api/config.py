@@ -2,13 +2,16 @@
 
 import base64
 import binascii
+import ipaddress
 import os
+from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import FailurePolicy
+from .manifest import ManifestValidationError, validate_model_manifest
 
 
 class Settings(BaseModel):
@@ -33,13 +36,13 @@ class Settings(BaseModel):
     default=FailurePolicy.BLOCK,
     validation_alias="FAILURE_POLICY"
   )
-  model_weights_dir: str = Field(
-    default="/opt/proctoring/model-weights",
-    validation_alias="MODEL_WEIGHTS_DIR"
+  model_manifest_path: Path = Field(
+    default=Path("/etc/proctoring/model-weights.json"),
+    validation_alias="MODEL_MANIFEST_PATH"
   )
-  model_downloads_allowed: bool = Field(
+  inference_requested: bool = Field(
     default=False,
-    validation_alias="MODEL_DOWNLOADS_ALLOWED"
+    validation_alias="INFERENCE_REQUESTED"
   )
 
   @classmethod
@@ -72,23 +75,77 @@ class Settings(BaseModel):
 
   @model_validator(mode="after")
   def validate_and_normalize_urls(self) -> "Settings":
-    database = urlsplit(self.database_url)
-    if database.scheme != "mysql" or not database.hostname:
-      raise ValueError("DATABASE_URL must use the mysql: scheme")
+    _validate_database_url(self.database_url)
 
     self.web_origin = _origin(self.web_origin)
     self.api_public_url = _absolute_http_url(self.api_public_url).rstrip("/")
     self.s3_endpoint = _absolute_http_url(self.s3_endpoint).rstrip("/")
+    if self.inference_requested:
+      try:
+        validate_model_manifest(self.model_manifest_path, require_artifacts=True)
+      except ManifestValidationError as error:
+        raise ValueError(f"model manifest: {error}") from error
     return self
 
 
 def _absolute_http_url(value: str) -> str:
-  parsed = urlsplit(value)
-  if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+  parsed = _parse_network_url(value, "HTTP(S) URL")
+  if parsed.scheme not in {"http", "https"}:
     raise ValueError("must be an absolute HTTP(S) URL")
+  if parsed.username is not None or parsed.password is not None:
+    raise ValueError("must not include credentials")
+  if parsed.query or parsed.fragment:
+    raise ValueError("must not include a query or fragment")
   return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
 
 
 def _origin(value: str) -> str:
   parsed = urlsplit(_absolute_http_url(value))
   return urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
+def _validate_database_url(value: str) -> None:
+  parsed = _parse_network_url(value, "DATABASE_URL")
+  if parsed.scheme != "mysql":
+    raise ValueError("DATABASE_URL must use the mysql: scheme")
+
+
+def _parse_network_url(value: str, description: str):
+  try:
+    parsed = urlsplit(value)
+    port = parsed.port
+  except ValueError as error:
+    raise ValueError(f"{description} must have a valid host and port") from error
+
+  if not parsed.hostname:
+    raise ValueError(f"{description} must have a valid host and port")
+  if port is not None and not 1 <= port <= 65535:
+    raise ValueError(f"{description} must have a valid host and port")
+  _validate_hostname(parsed.hostname, description)
+  return parsed
+
+
+def _validate_hostname(hostname: str, description: str) -> None:
+  try:
+    ipaddress.ip_address(hostname)
+    return
+  except ValueError:
+    pass
+
+  if hostname == "localhost":
+    return
+  try:
+    encoded = hostname.encode("idna").decode("ascii")
+  except UnicodeError as error:
+    raise ValueError(f"{description} must have a valid host and port") from error
+
+  labels = encoded.split(".")
+  if len(encoded) > 253 or any(
+    not label
+    or len(label) > 63
+    or label.startswith("-")
+    or label.endswith("-")
+    or not all(character.isalnum() or character == "-" for character in label)
+    for label in labels
+  ):
+    raise ValueError(f"{description} must have a valid host and port")
