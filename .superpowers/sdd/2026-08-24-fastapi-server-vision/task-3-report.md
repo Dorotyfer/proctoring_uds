@@ -107,3 +107,31 @@ Review GREEN verification:
 > git diff --check
 exit 0
 ```
+
+## Review round 2 shutdown evidence
+
+Code correction: `f242830615740837bfa157117884905d97034fb8` (parent `8bc6506581c332cd4ac6a0303aaf8ae70b49d8b5`).
+
+`RuntimeDependencies.close()` now closes S3/storage first and disposes the database engine in a `finally` block. A storage-close exception remains the exception observed by the caller after cleanup, while the engine disposal is guaranteed.
+
+RED:
+
+```text
+> .venv\Scripts\python.exe -m pytest apps/api/tests/test_runtime.py -q
+FAILED test_runtime_shutdown_disposes_engine_when_storage_close_fails
+assert ['storage.close'] == ['storage.close', 'engine.dispose']
+1 failed, 4 passed in 2.74s
+```
+
+GREEN:
+
+```text
+> .venv\Scripts\python.exe -m pytest apps/api/tests/test_runtime.py -q
+5 passed in 2.82s
+
+> .venv\Scripts\python.exe -m pytest apps/api/tests -q
+122 passed, 1 skipped in 5.35s
+
+> git diff --check
+exit 0
+```
