@@ -6,10 +6,10 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from proctoring_api.services.analysis import AnalysisCapacityError, ChallengeExpiredError
+from proctoring_api.services.analysis import AmbiguousEnqueueError, AnalysisCapacityError, ChallengeExpiredError
 
 
 LEASE_SECONDS = 120
@@ -42,14 +42,17 @@ class SqlAnalysisRepository:
       return _job(row) if row else None
 
   async def enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    async with self._engine.begin() as connection:
-      await self._lock_session(connection, input_data["sessionId"])
-      await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
-      existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
-      if existing:
-        return _job(existing), False
-      await self._check_capacity(connection, input_data["sessionId"], input_data["type"], input_data["now"])
-      return await self._insert_job(connection, input_data)
+    try:
+      async with self._engine.begin() as connection:
+        await self._lock_session(connection, input_data["sessionId"])
+        await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
+        existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
+        if existing:
+          return _job(existing), False
+        await self._check_capacity(connection, input_data["sessionId"], input_data["type"], input_data["now"])
+        return await self._insert_job(connection, input_data)
+    except DBAPIError as error:
+      raise AmbiguousEnqueueError("Analysis enqueue acknowledgement unavailable") from error
 
   async def consume_challenge_and_enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     async with self._engine.begin() as connection:
@@ -108,7 +111,6 @@ class SqlAnalysisRepository:
       result = await connection.execute(text("""
         UPDATE proctoring_analysis_jobs SET lease_expires_at = :lease_expires_at
         WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token AND lease_expires_at > :now
-          AND lease_expires_at > :now
       """), {"id": job_id, "owner_token": owner_token, "now": now, "lease_expires_at": now + timedelta(seconds=LEASE_SECONDS)})
       return result.rowcount == 1
 
@@ -120,7 +122,7 @@ class SqlAnalysisRepository:
         UPDATE proctoring_analysis_jobs
         SET state = 'completed', result = :result, completed_at = :now,
           lease_owner_token = NULL, lease_expires_at = NULL
-        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token
+        WHERE id = :id AND state = 'processing' AND lease_owner_token = :owner_token AND lease_expires_at > :now
       """), {"id": job_id, "owner_token": owner_token, "result": json.dumps(result_data), "now": now})
       return result.rowcount == 1
 

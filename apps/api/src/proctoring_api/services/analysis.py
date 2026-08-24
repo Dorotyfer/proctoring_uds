@@ -37,6 +37,10 @@ class AnalysisCapacityError(RuntimeError):
     self.retry_after_seconds = retry_after_seconds
 
 
+class AmbiguousEnqueueError(RuntimeError):
+  """A database outcome whose commit acknowledgement cannot be trusted."""
+
+
 @dataclass(frozen=True)
 class ValidatedJpeg:
   data: bytes
@@ -143,8 +147,11 @@ class AnalysisQueueService:
         "sessionId": session_id, "analysisId": analysis_id, "type": "preparation", "challengeId": challenge_id,
         "consentAccepted": True, "frames": uploads, "now": self._now()
       })
-    except Exception:
+    except AmbiguousEnqueueError:
       return await self._recover_enqueue(session_id, analysis_id, uploads)
+    except Exception:
+      await self._delete_uploads(uploads)
+      raise
     if not created:
       await self._delete_uploads(uploads)
     return job
@@ -161,8 +168,11 @@ class AnalysisQueueService:
         "sessionId": session_id, "analysisId": analysis_id, "type": "monitoring", "frames": uploads,
         "now": self._now()
       })
-    except Exception:
+    except AmbiguousEnqueueError:
       return await self._recover_enqueue(session_id, analysis_id, uploads)
+    except Exception:
+      await self._delete_uploads(uploads)
+      raise
     if not created:
       await self._delete_uploads(uploads)
     return job
