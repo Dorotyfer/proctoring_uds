@@ -1,7 +1,10 @@
+import asyncio
+
 from fastapi.testclient import TestClient
+import pytest
 
 from proctoring_api.config import Settings
-from proctoring_api.main import create_runtime_app
+from proctoring_api.main import RuntimeDependencies, create_runtime_app
 from proctoring_api.db.engine import create_mariadb_engine
 
 
@@ -32,6 +35,48 @@ class Storage:
 
   async def close(self) -> None:
     self.closed = True
+
+
+class OrderedEngine:
+  def __init__(self, calls: list[str]) -> None:
+    self.calls = calls
+
+  async def dispose(self) -> None:
+    self.calls.append("engine.dispose")
+
+
+class ClosingStorage:
+  def __init__(self, calls: list[str], error: Exception | None = None) -> None:
+    self.calls = calls
+    self.error = error
+
+  async def close(self) -> None:
+    self.calls.append("storage.close")
+    if self.error:
+      raise self.error
+
+
+def runtime_dependencies(engine, storage) -> RuntimeDependencies:
+  return RuntimeDependencies(engine, None, None, storage, None)
+
+
+def test_runtime_shutdown_closes_storage_before_disposing_engine() -> None:
+  calls: list[str] = []
+
+  asyncio.run(runtime_dependencies(OrderedEngine(calls), ClosingStorage(calls)).close())
+
+  assert calls == ["storage.close", "engine.dispose"]
+
+
+def test_runtime_shutdown_disposes_engine_when_storage_close_fails() -> None:
+  calls: list[str] = []
+
+  with pytest.raises(RuntimeError, match="storage close failed"):
+    asyncio.run(runtime_dependencies(
+      OrderedEngine(calls), ClosingStorage(calls, RuntimeError("storage close failed"))
+    ).close())
+
+  assert calls == ["storage.close", "engine.dispose"]
 
 
 def test_runtime_factory_composes_services_without_connecting_until_health_and_disposes_engine() -> None:

@@ -41,8 +41,10 @@ class RuntimeDependencies:
   evidence_service: EvidenceService
 
   async def close(self) -> None:
-    await self.object_storage.close()
-    await self.engine.dispose()
+    try:
+      await self.object_storage.close()
+    finally:
+      await self.engine.dispose()
 
 
 def create_object_storage(settings: Settings) -> S3ObjectStorage:
