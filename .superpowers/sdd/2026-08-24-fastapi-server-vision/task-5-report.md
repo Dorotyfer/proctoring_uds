@@ -48,15 +48,15 @@ GREEN commands:
 # 10 passed
 
 & .\.venv\Scripts\python.exe -m pytest apps/api/tests -q
-# 151 passed, 2 skipped
+# 152 passed, 3 skipped
 ```
 
 The existing MariaDB integration suite remains environment-gated by `TEST_DATABASE_URL`; those two tests were skipped in this workspace. Before deployment, run the migration runner and the integration marker against a disposable MariaDB instance, then exercise two independent workers claiming the same queued set.
 
 ## Commits and integration gates
 
-- Code and tests: `88e366b` (`feat: add durable analysis queue API`).
-- Report: recorded in the following documentation commit.
+- Code and tests: `88e366b` (`feat: add durable analysis queue API`) and `b2803ff` (`test: cover concurrent durable queue claims`).
+- Report: `5548505` and this final report update.
 - Gate 1: apply migrations `001` through `009` in order under the advisory-lock runner.
 - Gate 2: provision the S3/MinIO staging bucket and AES-256 evidence key before accepting upload traffic.
 - Gate 3: run worker claim/renew/complete/fail ownership coverage against MariaDB before enabling worker service.
