@@ -41,7 +41,11 @@ def create_app(
   event_service: EventService | None = None,
   jwt_secret: str | None = None,
   moodle_integration_key: str | None = None,
-  web_origin: str | None = None
+  web_origin: str | None = None,
+  panel_repository: object | None = None,
+  biometric_profile_repository: object | None = None,
+  panel_sso_secret: str | None = None,
+  api_public_url: str | None = None
 ) -> FastAPI:
   """Build an HTTP-only application without loading runtime configuration or models."""
 
@@ -55,7 +59,7 @@ def create_app(
   app.state.object_storage = object_storage
   if web_origin:
     app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=True,
-      allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
+      allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"])
 
   @app.exception_handler(HTTPException)
   async def http_exception(_: Request, error: HTTPException) -> JSONResponse:
@@ -93,6 +97,11 @@ def create_app(
     _register_task_two_routes(
       app, session_service, event_service, jwt_secret, moodle_integration_key
     )
+  if panel_repository and evidence_service and jwt_secret and panel_sso_secret and web_origin and api_public_url:
+    from proctoring_api.panel_routes import register_panel_routes
+    app.include_router(register_panel_routes(panel_repository, evidence_service, biometric_profile_repository,
+      jwt_secret=jwt_secret, panel_sso_secret=panel_sso_secret, web_origin=web_origin,
+      api_public_url=api_public_url))
   return app
 
 

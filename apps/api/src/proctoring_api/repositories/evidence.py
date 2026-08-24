@@ -46,6 +46,25 @@ class SqlEvidenceRepository:
       row = result.mappings().first()
       return map_evidence(row) if row else None
 
+  async def find_authorized(
+    self, evidence_id: str, course_ids: set[str], institutional: bool
+  ) -> dict[str, Any] | None:
+    if not institutional and not course_ids:
+      return None
+    condition = "evidence.id = :value"
+    parameters: dict[str, Any] = {"value": evidence_id}
+    if not institutional:
+      placeholders = []
+      for index, course_id in enumerate(sorted(course_ids)):
+        name = f"course_id_{index}"
+        placeholders.append(f":{name}")
+        parameters[name] = course_id
+      condition += f" AND sessions.moodle_course_id IN ({', '.join(placeholders)})"
+    async with self._engine.connect() as connection:
+      result = await connection.execute(text(_select_evidence(condition)), parameters)
+      row = result.mappings().first()
+      return map_evidence(row) if row else None
+
   async def audit(self, input_data: dict[str, Any]) -> None:
     async with self._engine.begin() as connection:
       await connection.execute(text("""

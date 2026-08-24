@@ -19,6 +19,10 @@ class EvidenceAccessError(RuntimeError):
   """Sanitized failure for evidence authorization and delivery."""
 
 
+class EvidenceNotFoundError(EvidenceAccessError):
+  """A valid content token referred to deleted or non-panel evidence."""
+
+
 class ObjectStorage(Protocol):
   async def put(self, key: str, body: bytes, content_type: str) -> None: ...
   async def get(self, key: str) -> bytes: ...
@@ -110,7 +114,8 @@ class EvidenceService:
     ip_address: str | None,
     user_agent: str | None
   ) -> str:
-    evidence = await self._repository.find_by_id(evidence_id)
+    finder = getattr(self._repository, "find_authorized", None)
+    evidence = await finder(evidence_id, course_ids, institutional) if finder else await self._repository.find_by_id(evidence_id)
     if not _may_view(evidence, can_view_evidence, course_ids, institutional):
       raise EvidenceAccessError("Evidence access unavailable")
     context = _audit_context(ip_address, user_agent)
@@ -121,6 +126,7 @@ class EvidenceService:
     now = self._now()
     return jwt.encode({
       "evidenceId": evidence_id, "moodleUserId": actor_id, "aud": CONTENT_AUDIENCE,
+      "courseIds": sorted(course_ids), "institutional": institutional,
       "iat": now, "exp": now + timedelta(seconds=60)
     }, self._content_token_secret, algorithm="HS256")
 
@@ -129,12 +135,17 @@ class EvidenceService:
   ) -> EvidenceContent:
     try:
       claims = jwt.decode(access_token, self._content_token_secret, algorithms=["HS256"], audience=CONTENT_AUDIENCE,
-        options={"require": ["exp", "iat", "aud", "evidenceId", "moodleUserId"]})
+        options={"require": ["exp", "iat", "aud", "evidenceId", "moodleUserId", "courseIds", "institutional"]})
       if claims.get("evidenceId") != evidence_id:
         raise EvidenceAccessError("Evidence content unavailable")
-      evidence = await self._repository.find_by_id(evidence_id)
-      if not evidence or evidence.get("kind") != "alert":
+      course_ids = claims.get("courseIds")
+      institutional = claims.get("institutional")
+      if not isinstance(course_ids, list) or any(not isinstance(value, str) for value in course_ids) or not isinstance(institutional, bool):
         raise EvidenceAccessError("Evidence content unavailable")
+      finder = getattr(self._repository, "find_authorized", None)
+      evidence = await finder(evidence_id, set(course_ids), institutional) if finder else await self._repository.find_by_id(evidence_id)
+      if not evidence or evidence.get("kind") != "alert":
+        raise EvidenceNotFoundError("Evidence content unavailable")
       body = await self.read_authorized(evidence)
       context = _audit_context(ip_address, user_agent)
       await self._repository.audit({

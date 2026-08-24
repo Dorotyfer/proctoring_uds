@@ -334,6 +334,31 @@ def test_evidence_content_fails_closed_for_invalid_token_and_unauthorized_scope(
   assert repository.audits == []
 
 
+def test_evidence_content_rechecks_the_signed_course_scope_in_the_repository() -> None:
+  class ScopedRepository(StrictEvidenceRepository):
+    def __init__(self) -> None:
+      super().__init__()
+      self.authorized_calls = []
+
+    async def find_authorized(self, evidence_id, course_ids, institutional):
+      self.authorized_calls.append((evidence_id, course_ids, institutional))
+      return self.evidence.get(evidence_id)
+
+  storage = StrictStorage()
+  repository = ScopedRepository()
+  service = evidence_service(storage, repository)
+  evidence = asyncio.run(service.store_capture("session-1", "alert", b"jpeg"))
+
+  token = asyncio.run(service.issue_content_token(
+    evidence["id"], "reviewer", True, {"course-1"}, False, None, None
+  ))
+  asyncio.run(service.read_content(evidence["id"], token))
+
+  assert repository.authorized_calls == [
+    (evidence["id"], {"course-1"}, False), (evidence["id"], {"course-1"}, False)
+  ]
+
+
 def test_purge_deletes_object_audits_and_marks_metadata_only_after_delete() -> None:
   storage = StrictStorage()
   repository = StrictEvidenceRepository()

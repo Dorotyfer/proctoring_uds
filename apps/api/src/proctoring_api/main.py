@@ -14,6 +14,8 @@ from proctoring_api.db.engine import create_mariadb_engine
 from proctoring_api.repositories.events import SqlEventRepository
 from proctoring_api.repositories.evidence import SqlEvidenceRepository
 from proctoring_api.repositories.sessions import SqlSessionRepository
+from proctoring_api.repositories.panel import SqlPanelRepository
+from proctoring_api.repositories.biometric_profiles import SqlBiometricProfileRepository
 from proctoring_api.services.events import EventService
 from proctoring_api.services.evidence import EvidenceService
 from proctoring_api.services.evidence_crypto import EvidenceEncryptionService
@@ -39,6 +41,8 @@ class RuntimeDependencies:
   evidence_repository: SqlEvidenceRepository
   object_storage: S3ObjectStorage
   evidence_service: EvidenceService
+  panel_repository: SqlPanelRepository | None = None
+  biometric_profiles: SqlBiometricProfileRepository | None = None
 
   async def close(self) -> None:
     try:
@@ -70,7 +74,8 @@ def create_runtime_dependencies(
     EvidenceEncryptionService(settings.evidence_encryption_key_bytes), object_storage, evidence_repository,
     retention_days=settings.evidence_retention_days, content_token_secret=settings.jwt_secret
   )
-  return RuntimeDependencies(engine, sessions, evidence_repository, object_storage, evidence_service)
+  return RuntimeDependencies(engine, sessions, evidence_repository, object_storage, evidence_service,
+    SqlPanelRepository(engine), SqlBiometricProfileRepository(engine))
 
 
 def create_runtime_app(
@@ -92,7 +97,11 @@ def create_runtime_app(
     event_service=EventService(SessionService(sessions), SqlEventRepository(dependencies.engine)),
     jwt_secret=settings.jwt_secret,
     moodle_integration_key=settings.moodle_integration_key,
-    web_origin=settings.web_origin
+    web_origin=settings.web_origin,
+    panel_repository=dependencies.panel_repository,
+    biometric_profile_repository=dependencies.biometric_profiles,
+    panel_sso_secret=settings.panel_sso_secret,
+    api_public_url=settings.api_base_url
   )
 
   @asynccontextmanager
