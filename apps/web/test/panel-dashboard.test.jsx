@@ -124,8 +124,11 @@ it('shows control level and explainable behavior risk for an attempt', async () 
 
   render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
   fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
-  expect(await screen.findByText('Riesgo alto')).toBeInTheDocument();
+  expect(await screen.findByText(/Riesgo alto/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ver reporte de fraude' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Estudiante' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Nivel de control' })).toBeInTheDocument();
+  expect(screen.getByRole('cell', { name: /Ana Pérez/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Ana Pérez/ }));
 
   expect(await screen.findByText('Riesgo de fraude alto')).toBeInTheDocument();
