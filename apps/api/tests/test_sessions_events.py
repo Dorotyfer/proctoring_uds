@@ -247,10 +247,44 @@ def test_invalid_session_objects_include_stable_zod_compatible_details() -> None
     {"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["quizName"], "message": "Required"},
     {"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["studentName"], "message": "Required"},
     {"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["studentDocument"], "message": "Required"},
-    {"code": "invalid_enum_value", "options": ["browser", "seb"], "path": ["deviceMode"], "message": "Invalid enum value. Expected 'browser' | 'seb', received 'desktop'"},
+    {"code": "invalid_enum_value", "options": ["browser", "seb"], "received": "desktop", "path": ["deviceMode"], "message": "Invalid enum value. Expected 'browser' | 'seb', received 'desktop'"},
     {"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["issuedAt"], "message": "Required"},
     {"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["expiresAt"], "message": "Required"}
   ]
+
+
+@pytest.mark.parametrize(("mutate", "expected"), [
+  (lambda payload: payload.pop("studentDocument"), [{"code": "invalid_type", "expected": "string", "received": "undefined", "path": ["studentDocument"], "message": "Required"}]),
+  (lambda payload: payload.update({"moodleUserId": 7}), [{"code": "invalid_type", "expected": "string", "received": "number", "path": ["moodleUserId"], "message": "Expected string, received number"}]),
+  (lambda payload: payload.update({"studentName": " \t "}), [{"code": "too_small", "minimum": 1, "type": "string", "inclusive": True, "exact": False, "message": "String must contain at least 1 character(s)", "path": ["studentName"]}]),
+  (lambda payload: payload.update({"courseName": "x" * 256}), [{"code": "too_big", "maximum": 255, "type": "string", "inclusive": True, "exact": False, "message": "String must contain at most 255 character(s)", "path": ["courseName"]}]),
+  (lambda payload: payload.update({"studentDocument": "x" * 101}), [{"code": "too_big", "maximum": 100, "type": "string", "inclusive": True, "exact": False, "message": "String must contain at most 100 character(s)", "path": ["studentDocument"]}]),
+  (lambda payload: payload.update({"deviceMode": "desktop"}), [{"code": "invalid_enum_value", "options": ["browser", "seb"], "received": "desktop", "path": ["deviceMode"], "message": "Invalid enum value. Expected 'browser' | 'seb', received 'desktop'"}]),
+  (lambda payload: payload.update({"deviceMode": 1}), [{"code": "invalid_type", "expected": "'browser' | 'seb'", "received": "number", "path": ["deviceMode"], "message": "Expected 'browser' | 'seb', received number"}]),
+  (lambda payload: payload.update({"issuedAt": "not-a-datetime"}), [{"code": "invalid_string", "validation": "datetime", "path": ["issuedAt"], "message": "Invalid datetime"}]),
+  (lambda payload: payload.update({"issuedAt": 1}), [{"code": "invalid_type", "expected": "string", "received": "number", "path": ["issuedAt"], "message": "Expected string, received number"}]),
+  (lambda payload: payload.update({"expiresAt": payload["issuedAt"]}), [{"code": "custom", "path": ["expiresAt"], "message": "expiresAt must be later than issuedAt"}]),
+  (lambda payload: payload.update({"moodleUserId": 7, "courseName": "x" * 256, "deviceMode": "desktop"}), [
+    {"code": "invalid_type", "expected": "string", "received": "number", "path": ["moodleUserId"], "message": "Expected string, received number"},
+    {"code": "too_big", "maximum": 255, "type": "string", "inclusive": True, "exact": False, "message": "String must contain at most 255 character(s)", "path": ["courseName"]},
+    {"code": "invalid_enum_value", "options": ["browser", "seb"], "received": "desktop", "path": ["deviceMode"], "message": "Invalid enum value. Expected 'browser' | 'seb', received 'desktop'"}
+  ])
+])
+def test_session_validation_details_match_legacy_zod_issue_families(mutate, expected) -> None:
+  client, _ = create_client()
+  payload = session_payload()
+  mutate(payload)
+
+  response = client.post("/v1/internal/sessions", headers={"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}, json=payload)
+
+  assert response.status_code == 400
+  assert response.json() == {"error": "Invalid session payload", "details": expected}
+
+
+def test_nullable_student_document_is_accepted_by_the_legacy_session_contract() -> None:
+  client, _ = create_client()
+  response = client.post("/v1/internal/sessions", headers={"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}, json=session_payload() | {"studentDocument": None})
+  assert response.status_code == 201
 
 
 def test_browser_token_rejects_tampering_and_missing_required_claims() -> None:

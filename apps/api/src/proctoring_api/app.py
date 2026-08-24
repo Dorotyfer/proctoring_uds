@@ -99,7 +99,7 @@ def _register_task_two_routes(
       session = await session_service.create(CreateSessionInput.model_validate(payload))
     except ValidationError as error:
       return JSONResponse(status_code=400, content={
-        "error": "Invalid session payload", "details": _zod_issues(error)
+        "error": "Invalid session payload", "details": _zod_issues(error, payload)
       })
     except ValueError:
       return JSONResponse(status_code=400, content={"error": "Invalid session payload"})
@@ -187,19 +187,59 @@ async def _object_json(request: Request) -> dict:
   return payload
 
 
-def _zod_issues(error: ValidationError) -> list[dict]:
+def _zod_issues(error: ValidationError, payload: dict) -> list[dict]:
   """Translate the supported session-contract errors to the established Zod wire form."""
 
   issues = []
   for issue in error.errors():
     path = list(issue["loc"])
+    field = path[0] if path else None
+    value = payload.get(field) if field else None
     if issue["type"] == "missing":
       issues.append({"code": "invalid_type", "expected": "string", "received": "undefined",
         "path": path, "message": "Required"})
-    elif path == ["deviceMode"] and issue["type"] == "enum":
-      received = issue.get("input")
-      issues.append({"code": "invalid_enum_value", "options": ["browser", "seb"], "path": path,
-        "message": f"Invalid enum value. Expected 'browser' | 'seb', received '{received}'"})
+    elif field == "deviceMode" and not isinstance(value, str):
+      received = _zod_received_type(value)
+      issues.append({"code": "invalid_type", "expected": "'browser' | 'seb'", "received": received,
+        "path": path, "message": f"Expected 'browser' | 'seb', received {received}"})
+    elif field == "deviceMode" and issue["type"] == "enum":
+      issues.append({"code": "invalid_enum_value", "options": ["browser", "seb"], "received": value,
+        "path": path, "message": f"Invalid enum value. Expected 'browser' | 'seb', received '{value}'"})
+    elif field in {"issuedAt", "expiresAt"} and not isinstance(value, str):
+      received = _zod_received_type(value)
+      issues.append({"code": "invalid_type", "expected": "string", "received": received,
+        "path": path, "message": f"Expected string, received {received}"})
+    elif field in {"issuedAt", "expiresAt"} and isinstance(value, str):
+      issues.append({"code": "invalid_string", "validation": "datetime", "path": path,
+        "message": "Invalid datetime"})
+    elif issue["type"] == "string_too_short":
+      issues.append({"code": "too_small", "minimum": 1, "type": "string", "inclusive": True,
+        "exact": False, "message": "String must contain at least 1 character(s)", "path": path})
+    elif issue["type"] == "string_too_long":
+      issues.append({"code": "too_big", "maximum": issue["ctx"]["max_length"], "type": "string",
+        "inclusive": True, "exact": False,
+        "message": f"String must contain at most {issue['ctx']['max_length']} character(s)", "path": path})
+    elif issue["type"] == "string_type":
+      received = _zod_received_type(value)
+      issues.append({"code": "invalid_type", "expected": "string", "received": received,
+        "path": path, "message": f"Expected string, received {received}"})
+    elif not path and "expiresAt must be later than issuedAt" in issue["msg"]:
+      issues.append({"code": "custom", "path": ["expiresAt"],
+        "message": "expiresAt must be later than issuedAt"})
     else:
       issues.append({"code": "custom", "path": path, "message": issue["msg"]})
   return issues
+
+
+def _zod_received_type(value: object) -> str:
+  if value is None:
+    return "null"
+  if isinstance(value, bool):
+    return "boolean"
+  if isinstance(value, (int, float)):
+    return "number"
+  if isinstance(value, list):
+    return "array"
+  if isinstance(value, dict):
+    return "object"
+  return type(value).__name__
