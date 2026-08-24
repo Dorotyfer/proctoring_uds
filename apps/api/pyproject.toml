@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proctoring-api"
+version = "0.1.0"
+description = "Server-side proctoring API"
+requires-python = "==3.12.*"
+dependencies = [
+  "fastapi==0.115.12",
+  "pydantic==2.10.6",
+  "uvicorn==0.34.0"
+]
+
+[project.optional-dependencies]
+test = [
+  "httpx==0.28.1",
+  "pytest==8.3.5"
+]
+runtime = [
+  "asyncmy==0.2.10",
+  "boto3==1.37.0",
+  "cryptography==44.0.2",
+  "jinja2==3.1.5",
+  "pyjwt==2.10.1",
+  "sqlalchemy==2.0.38"
+]
+vision = [
+  "deepface==0.0.93",
+  "torch==2.6.0",
+  "torchvision==0.21.0"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
