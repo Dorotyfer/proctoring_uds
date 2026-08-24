@@ -3,8 +3,15 @@ export async function createHumanDetector() {
   return createDetectorWithFallback(Human);
 }
 
+export function getModelBasePath(pathname = '') {
+  return pathname.startsWith('/proctoring/') ? '/proctoring/models' : '/models';
+}
+
 export async function createDetectorWithFallback(Human) {
   let lastError;
+  const modelBasePath = getModelBasePath(
+    typeof window === 'undefined' ? '' : window.location.pathname
+  );
 
   for (const backend of ['webgl', 'cpu']) {
     try {
@@ -19,7 +26,7 @@ export async function createDetectorWithFallback(Human) {
         },
         gesture: { enabled: false },
         hand: { enabled: false },
-        modelBasePath: '/models',
+        modelBasePath,
         object: { enabled: false }
       });
       await human.load();
