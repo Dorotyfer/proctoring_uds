@@ -105,3 +105,35 @@ GREEN output: `82 passed in 2.19s`; `git diff --check` completed without errors.
 Review implementation commit: `fd6e42c7202bfaa2740cca372c07103ccfebd3d6` (`fix: harden FastAPI session runtime compatibility`).
 
 Live MariaDB integration remains deferred because no disposable MariaDB/`TEST_DATABASE_URL` is available. SQL execution, locked-state race behavior, advisory-lock release, failed-DDL recording semantics, and row mapping are covered with strict async fakes; production integration is intentionally environment-gated.
+
+## Review round 2
+
+Corrected event exception ordering so `SessionUnavailableError` is returned as the exact 409 browser response; object-shaped session validation now emits stable Zod-compatible `details`, while malformed/non-object bodies retain no-details errors. CORS now sends credential parity only for the configured origin. Uppercase canonical UUIDs normalize to lowercase; braces remain rejected. Asyncmy connections receive `SET time_zone = '+00:00'` through `init_command` on every connection.
+
+RED command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests\test_sessions_events.py apps\api\tests\test_runtime.py -q
+```
+
+RED output: 5 failures for absent CORS credentials, absent `details`, uppercase UUID rejection, `SessionUnavailableError` incorrectly mapped to 400, and missing MariaDB UTC `connect_args`.
+
+Focused GREEN command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests\test_sessions_events.py apps\api\tests\test_repositories.py apps\api\tests\test_migrations.py apps\api\tests\test_runtime.py -q
+```
+
+GREEN output: `27 passed in 3.12s`.
+
+Full GREEN command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests -q
+```
+
+GREEN output: `86 passed in 3.38s`; `git diff --check` completed without errors.
+
+One existing token-tampering assertion was made deterministic during full-suite verification: changing an unpadded base64url signature’s final character can leave unused bits unchanged, so the test now changes the first signature character. JWT signature verification and required-claim behavior were independently reproduced before that test-only correction.
+
+Review round-2 implementation commit: `6fbc90627e5ce741cc0e628bf7dc68f6e4b127a5` (`fix: align FastAPI route and database compatibility`). Live MariaDB integration remains environment-gated because no disposable database/`TEST_DATABASE_URL` is available.
