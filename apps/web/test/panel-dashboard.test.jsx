@@ -107,6 +107,33 @@ it('navigates from a course to attempts and shows the full document only in deta
   expect(screen.getByRole('button', { name: /•••4567/ })).toBeInTheDocument();
 });
 
+it('shows control level and explainable behavior risk for an attempt', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-risk', attemptId: '15', studentName: 'Ana Pérez', studentDocumentLast4: '•••4567', quizName: 'Examen', deviceMode: 'browser', status: 'completed', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1, controlLevel: 'high', riskCategory: 'high_risk', riskScore: 80 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-risk', attemptId: '15', courseId: '7', studentName: 'Ana Pérez', studentDocument: '1234567', quizName: 'Examen', status: 'completed', deviceMode: 'browser', controlLevel: 'high',
+        risk: { category: 'high_risk', controlLevel: 'high', score: 80, counts: { multiple_faces: 1 }, reasons: [{ code: 'multiple_faces', count: 1, label: 'Se detectaron múltiples rostros', points: 30 }] },
+        alerts: [], events: [], evidence: []
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  expect(await screen.findByText('Riesgo alto')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Ana Pérez/ }));
+
+  expect(await screen.findByText('Riesgo de fraude alto')).toBeInTheDocument();
+  expect(screen.getByText('Nivel de control: Alto')).toBeInTheDocument();
+  expect(screen.getByText('Puntaje: 80/100')).toBeInTheDocument();
+  expect(screen.getByText('Se detectaron múltiples rostros')).toBeInTheDocument();
+  expect(screen.getByText(/requiere revisión humana/)).toBeInTheDocument();
+});
+
 it('renders only evidence marked as an incident', async () => {
   const requests = [
     response({ user: profile }),

@@ -26,7 +26,7 @@ export default function AttemptList({ course, filters, loading, pagination, sess
         {sessions.map((session) => (
           <button className="attempt-row" key={session.id} type="button" onClick={() => onOpen(session.id)}>
             <span><strong>{session.studentName || 'Estudiante no informado'}</strong><small>{session.studentDocumentLast4 || 'Documento no informado'} · {session.quizName || `Cuestionario ${session.quizId}`}</small></span>
-            <span><small>{formatDate(session.createdAt)} · {session.deviceMode}</small><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span></span>
+            <span><small>{formatDate(session.createdAt)} · {session.deviceMode} · Nivel {controlLevelLabel(session.controlLevel)}</small><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span><span className="badge">{riskSummaryLabel(session.riskCategory)}</span></span>
           </button>
         ))}
       </div>
@@ -41,4 +41,17 @@ export default function AttemptList({ course, filters, loading, pagination, sess
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString() : 'Fecha no informada';
+}
+
+function controlLevelLabel(level) {
+  if (level === 'low') return 'Bajo';
+  if (level === 'high') return 'Alto';
+  return 'Medio';
+}
+
+function riskSummaryLabel(category) {
+  if (category === 'high_risk') return 'Riesgo alto';
+  if (category === 'medium_risk') return 'Riesgo medio';
+  if (category === 'observation') return 'Observación';
+  return 'Normal';
 }

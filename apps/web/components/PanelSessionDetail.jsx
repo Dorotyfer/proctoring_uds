@@ -19,6 +19,7 @@ export default function PanelSessionDetail({ canManageBiometrics, session, onBac
           Exigir nueva inscripción biométrica
         </button>
       ) : null}
+      {session.risk ? <BehaviorAnalysis risk={session.risk} /> : null}
       <h3>Alertas</h3>
       {session.alerts.length === 0 ? <p>Sin alertas.</p> : session.alerts.map((alert) => (
         <article className="timeline-item" key={alert.id}>
@@ -55,5 +56,34 @@ function biometricStatusLabel(status) {
 
 function alertTypeLabel(type) {
   if (type === 'biometric_mismatch') return 'Identidad biométrica no coincidente';
+  if (type === 'multiple_faces') return 'Se detectaron múltiples rostros';
+  if (type === 'liveness_check_failed') return 'Falló la prueba de vida';
+  if (type === 'identity_check_failed') return 'Falló la verificación de identidad';
+  if (type === 'camera_interrupted') return 'Cámara interrumpida';
   return type;
+}
+
+function BehaviorAnalysis({ risk }) {
+  return (
+    <section className="behavior-analysis" aria-labelledby="behavior-analysis-title">
+      <h3 id="behavior-analysis-title">Análisis de comportamiento</h3>
+      <p><strong>{riskCategoryLabel(risk.category)}</strong></p>
+      <p><span>Nivel de control: {controlLevelLabel(risk.controlLevel)}</span> · <span>Puntaje: {risk.score}/100</span></p>
+      {risk.reasons?.length ? <ul>{risk.reasons.map((reason) => <li key={reason.code}><strong>{alertTypeLabel(reason.code)}</strong>: {reason.count} evento(s), {reason.points} puntos</li>)}</ul> : <p>Sin señales relevantes detectadas.</p>}
+      <p>El análisis es orientativo y requiere revisión humana.</p>
+    </section>
+  );
+}
+
+function controlLevelLabel(level) {
+  if (level === 'low') return 'Bajo';
+  if (level === 'high') return 'Alto';
+  return 'Medio';
+}
+
+function riskCategoryLabel(category) {
+  if (category === 'high_risk') return 'Riesgo de fraude alto';
+  if (category === 'medium_risk') return 'Riesgo de fraude medio';
+  if (category === 'observation') return 'Observación';
+  return 'Comportamiento normal';
 }
