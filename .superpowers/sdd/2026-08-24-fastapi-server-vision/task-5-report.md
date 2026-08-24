@@ -71,3 +71,20 @@ The existing MariaDB integration suite remains environment-gated by `TEST_DATABA
 - Result persistence and read projection use strict preparation or monitoring allowlists. Unknown/nested data is rejected. Commit-ack recovery queries the canonical job and preserves staging when acknowledgement ambiguity could otherwise delete referenced objects.
 
 Review verification: `& .\.venv\Scripts\python.exe -m pytest apps/api/tests -q` returned `155 passed, 3 skipped`; `git diff --check` passed. Code/test correction: `a7e7810`.
+
+## Review round 2 regression
+
+The exact expired/used challenge reproduction initially failed because broad enqueue recovery treated `ChallengeExpiredError` as an ambiguous database acknowledgement. Recovery is now restricted to `AmbiguousEnqueueError`; ordinary domain failures clean their staged uploads and retain their original API status. SQL completion/failure predicates require a live lease owner, with the duplicate renewal predicate removed.
+
+Commands run:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps/api/tests/test_analysis_queue.py::test_preparation_challenge_is_one_use_and_expires_after_120_seconds -q -vv
+# 1 passed
+& .\.venv\Scripts\python.exe -m pytest apps/api/tests -q
+# 155 passed, 3 skipped
+git diff --check
+# passed
+```
+
+Code: `c9f8287`.
