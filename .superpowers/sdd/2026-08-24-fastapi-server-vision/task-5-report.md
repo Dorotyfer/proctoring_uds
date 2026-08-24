@@ -88,3 +88,9 @@ git diff --check
 ```
 
 Code: `c9f8287`.
+
+## Review round 3
+
+`consume_challenge_and_enqueue` now maps database acknowledgement failures to the explicit ambiguous boundary. Canonical recovery obtains committed frame keys and removes only losing uploads. The runtime includes an ASGI upload-size guard before multipart parsing, strict finite result projection, paginated `staging/` listing, and an orphan-staging purge service seam.
+
+Verification: focused Task 5 tests returned `9 passed`; full Python suite returned `155 passed, 3 skipped`; `git diff --check` passed. Code: `3faf3dc`.
