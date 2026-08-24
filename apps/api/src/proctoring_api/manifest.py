@@ -12,6 +12,16 @@ from urllib.parse import urlsplit
 
 SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 EXACT_VERSION = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._+-]*$")
+MUTABLE_VERSION_LABELS = {
+  "latest",
+  "main",
+  "master",
+  "dev",
+  "develop",
+  "nightly",
+  "snapshot",
+  "head"
+}
 
 
 class ManifestValidationError(ValueError):
@@ -129,7 +139,7 @@ def _validate_release_artifact(entry: dict[str, Any], collection: str, index: in
   location = f"inventory.{collection}[{index}]"
   if not isinstance(entry.get("name"), str) or not entry["name"].strip():
     raise ManifestValidationError(f"{location}.name must identify an artifact")
-  if not isinstance(entry.get("version"), str) or not EXACT_VERSION.fullmatch(entry["version"]):
+  if not _is_exact_version(entry.get("version")):
     raise ManifestValidationError(f"{location}.version must be an exact version")
   if not _is_provenance_url(entry.get("source")):
     raise ManifestValidationError(f"{location}.source must be an absolute HTTP(S) provenance URL")
@@ -155,6 +165,23 @@ def _is_provenance_url(value: object) -> bool:
     and parsed.username is None
     and parsed.password is None
     and (port is None or 1 <= port <= 65535)
+  )
+
+
+def _is_exact_version(value: object) -> bool:
+  if not isinstance(value, str) or not EXACT_VERSION.fullmatch(value):
+    return False
+  normalized = value.casefold()
+  labels = re.split(r"[._+-]", normalized)
+  if any(label in MUTABLE_VERSION_LABELS for label in labels):
+    return False
+  return not any(
+    normalized.startswith(label) and (
+      len(normalized) == len(label)
+      or normalized[len(label)] in "._+-"
+      or normalized[len(label)].isdigit()
+    )
+    for label in MUTABLE_VERSION_LABELS
   )
 
 
