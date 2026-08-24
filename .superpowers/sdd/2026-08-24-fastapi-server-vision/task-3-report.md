@@ -72,3 +72,38 @@ The frozen Node adapter `apps/api/src/services/evidence-encryption-service.js` u
 - `apps/api/tests/test_evidence_integration.py` is marked `integration` and skipped unless `TEST_DATABASE_URL` plus `TEST_S3_ENDPOINT`, `TEST_S3_BUCKET`, `TEST_S3_ACCESS_KEY_ID`, and `TEST_S3_SECRET_ACCESS_KEY` are present. No live MariaDB/S3 integration is claimed here.
 - Node/npm/pnpm were not run. The existing Node source and SQL fixtures were read only as frozen compatibility references.
 - Task 5 owns the durable queue; Task 3 deliberately supplies only the `QueueReadiness` interface seam.
+
+## Review round 1 evidence
+
+Code review corrections are in `942b02f4ff76ba20395149d89d8e99e76438bbf2` (parent `e46d738d424243576cd300d18462abf066b7dd23`).
+
+- Runtime composition now creates one evidence encryption service, evidence repository, object storage service, and evidence service from `Settings`; they are available in `app.state` for Task 4 panel routes and Task 5 server-generated captures. The lifespan closes storage and disposes the engine. The purge CLI uses this exact dependency composition.
+- Evidence objects are now always UUID-keyed. Event-id uniqueness remains in the database; an event upsert re-reads the canonical row and deletes only the losing, distinct upload. Sequential, barrier-simulated concurrent, and repository upsert tests prove returned canonical records still decrypt and that orphaned uploads are removed.
+- Retry eligibility is now limited to explicit botocore connection/timeouts and `ClientError` HTTP 408/429/5xx. Credential, parameter-validation, authorization, and local validation failures use one attempt.
+- Content downloads accept request IP/user-agent context. IP values are normalized only when valid, control characters are removed from user agents, and user agents are bounded to 512 characters before the `download` audit write.
+- No evidence HTTP endpoints were added: panel evidence HTTP remains Task 4 and monitoring-capture HTTP remains Task 5.
+
+Review RED commands and observed failures:
+
+```text
+> .venv\Scripts\python.exe -m pytest apps/api/tests/test_evidence.py apps/api/tests/test_runtime.py -q
+6 failed, 15 passed in 2.79s
+
+> .venv\Scripts\python.exe -m pytest apps/api/tests/test_runtime.py::test_runtime_factory_composes_services_without_connecting_until_health_and_disposes_engine -q
+TypeError: create_runtime_app() got an unexpected keyword argument 'storage_factory'
+1 failed in 1.55s
+```
+
+Review GREEN verification:
+
+```text
+> .venv\Scripts\python.exe -m pytest apps/api/tests/test_evidence.py apps/api/tests/test_repositories.py apps/api/tests/test_runtime.py -q
+30 passed in 2.65s
+
+> .venv\Scripts\python.exe -m compileall apps/api/src -q
+> .venv\Scripts\python.exe -m pytest apps/api/tests -q
+120 passed, 1 skipped in 3.51s
+
+> git diff --check
+exit 0
+```
