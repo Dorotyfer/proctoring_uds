@@ -59,6 +59,17 @@ def test_settings_normalize_public_and_storage_urls() -> None:
   assert settings.liveness_center_threshold == 0.15
   assert settings.liveness_turn_threshold == 0.30
   assert settings.sface_interval_seconds == 60
+  assert settings.staging_retention_minutes == 30
+  assert settings.api_host == "127.0.0.1"
+  assert settings.api_port == 8000
+
+
+def test_settings_reject_non_loopback_api_bind() -> None:
+  environment = valid_environment()
+  environment["API_HOST"] = "0.0.0.0"
+
+  with pytest.raises(ValidationError, match="loopback"):
+    Settings.from_environment(environment)
 
 
 def test_settings_validate_directional_liveness_threshold_order_and_minimum_sface_cadence() -> None:

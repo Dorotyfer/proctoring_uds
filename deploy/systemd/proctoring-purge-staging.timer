@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic UDS Proctoring orphan staging purge
+
+[Timer]
+OnBootSec=10m
+OnUnitActiveSec=10m
+RandomizedDelaySec=60s
+Persistent=true
+Unit=proctoring-purge-staging.service
+
+[Install]
+WantedBy=timers.target

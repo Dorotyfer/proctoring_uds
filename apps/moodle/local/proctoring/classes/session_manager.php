@@ -8,11 +8,19 @@ class session_manager {
     public function __construct(private api_client $client) {
     }
 
-    public function create_for_attempt(\stdClass $attempt, string $devicemode): array {
+    public function create_for_attempt(
+        \stdClass $attempt,
+        string $devicemode,
+        ?string $failurepolicy = null
+    ): array {
         global $DB;
 
         if (!in_array($devicemode, ['browser', 'seb'], true)) {
             throw new \coding_exception('Unsupported proctoring device mode.');
+        }
+        $failurepolicy = $failurepolicy ?? 'block';
+        if (!in_array($failurepolicy, ['block', 'allow_with_alert'], true)) {
+            throw new \coding_exception('Unsupported proctoring failure policy.');
         }
 
         $existing = $DB->get_record('local_proctoring_sessions', ['attemptid' => $attempt->id]);
@@ -47,7 +55,8 @@ class session_manager {
             'studentDocument' => $studentdocument === '' ? null : $studentdocument,
             'deviceMode' => $devicemode,
             'issuedAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $issuedat),
-            'expiresAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $expiresat)
+            'expiresAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $expiresat),
+            'failurePolicy' => $failurepolicy
         ];
 
         $result = $this->client->create_session($payload);

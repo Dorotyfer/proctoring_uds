@@ -133,7 +133,8 @@ def load_runtime_app() -> FastAPI:
 
 def main() -> None:
   settings = Settings.from_process_environment()
-  uvicorn.run(create_runtime_app(settings), host="0.0.0.0", port=8000)
+  uvicorn.run(create_runtime_app(settings), host=settings.api_host, port=settings.api_port,
+    proxy_headers=True, forwarded_allow_ips="127.0.0.1,::1")
 
 
 if __name__ == "__main__":

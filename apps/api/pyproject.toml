@@ -26,9 +26,12 @@ proctoring-migrate = "proctoring_api.db.migrations:main"
 proctoring-api = "proctoring_api.main:main"
 proctoring-check-infra = "proctoring_api.cli:check_infrastructure_main"
 proctoring-purge = "proctoring_api.cli:purge_main"
+proctoring-purge-staging = "proctoring_api.cli:purge_staging_main"
 proctoring-worker = "proctoring_api.worker_main:main"
 proctoring-models = "proctoring_api.models_cli:main"
 proctoring-benchmark = "proctoring_api.benchmark:main"
+proctoring-fixtures = "proctoring_api.pilot:fixtures_main"
+proctoring-load = "proctoring_api.pilot:load_main"
 
 [project.optional-dependencies]
 test = [

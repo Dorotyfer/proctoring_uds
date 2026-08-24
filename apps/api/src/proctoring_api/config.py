@@ -53,6 +53,9 @@ class Settings(BaseModel):
   liveness_center_threshold: float = Field(default=0.15, ge=0, lt=1, validation_alias="LIVENESS_CENTER_THRESHOLD")
   liveness_turn_threshold: float = Field(default=0.30, gt=0, le=2, validation_alias="LIVENESS_TURN_THRESHOLD")
   sface_interval_seconds: int = Field(default=60, ge=60, validation_alias="SFACE_INTERVAL_SECONDS")
+  staging_retention_minutes: int = Field(default=30, ge=5, le=1440, validation_alias="STAGING_RETENTION_MINUTES")
+  api_host: str = Field(default="127.0.0.1", validation_alias="API_HOST")
+  api_port: int = Field(default=8000, ge=1, le=65535, validation_alias="API_PORT")
 
   @classmethod
   def from_environment(cls, environment: Mapping[str, str]) -> "Settings":
@@ -122,6 +125,13 @@ class Settings(BaseModel):
         raise ValueError("model manifest must be release-ready before inference")
     if self.liveness_center_threshold >= self.liveness_turn_threshold:
       raise ValueError("LIVENESS_CENTER_THRESHOLD must be lower than LIVENESS_TURN_THRESHOLD")
+    try:
+      self.api_host = str(ipaddress.ip_address(self.api_host))
+    except ValueError:
+      if self.api_host != "localhost":
+        raise ValueError("API_HOST must be a loopback address or localhost")
+    if self.api_host != "localhost" and not ipaddress.ip_address(self.api_host).is_loopback:
+      raise ValueError("API_HOST must be a loopback address or localhost")
     return self
 
 
