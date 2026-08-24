@@ -32,6 +32,9 @@ class Settings(BaseModel):
   s3_bucket: str = Field(min_length=1, validation_alias="S3_BUCKET")
   s3_access_key_id: str = Field(min_length=1, validation_alias="S3_ACCESS_KEY_ID")
   s3_secret_access_key: str = Field(min_length=1, validation_alias="S3_SECRET_ACCESS_KEY")
+  s3_force_path_style: bool = Field(default=False, validation_alias="S3_FORCE_PATH_STYLE")
+  s3_server_side_encryption: str | None = Field(default="AES256", validation_alias="S3_SERVER_SIDE_ENCRYPTION")
+  evidence_retention_days: int = Field(default=30, ge=1, le=3650, validation_alias="EVIDENCE_RETENTION_DAYS")
   failure_policy: FailurePolicy = Field(
     default=FailurePolicy.BLOCK,
     validation_alias="FAILURE_POLICY"
@@ -61,6 +64,10 @@ class Settings(BaseModel):
   def api_base_url(self) -> str:
     return self.api_public_url.rstrip("/")
 
+  @property
+  def evidence_encryption_key_bytes(self) -> bytes:
+    return base64.b64decode(self.evidence_encryption_key, validate=True)
+
   @field_validator("evidence_encryption_key", "biometric_encryption_key")
   @classmethod
   def validate_encryption_key(cls, value: str) -> str:
@@ -80,6 +87,10 @@ class Settings(BaseModel):
     self.web_origin = _origin(self.web_origin)
     self.api_public_url = _absolute_http_url(self.api_public_url).rstrip("/")
     self.s3_endpoint = _absolute_http_url(self.s3_endpoint).rstrip("/")
+    if self.s3_server_side_encryption == "none":
+      self.s3_server_side_encryption = None
+    elif self.s3_server_side_encryption != "AES256":
+      raise ValueError("S3_SERVER_SIDE_ENCRYPTION must be AES256 or none")
     if self.inference_requested:
       try:
         validate_model_manifest(self.model_manifest_path, require_artifacts=True)

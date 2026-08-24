@@ -13,6 +13,8 @@ from proctoring_api.db.engine import create_mariadb_engine
 from proctoring_api.repositories.events import SqlEventRepository
 from proctoring_api.repositories.sessions import SqlSessionRepository
 from proctoring_api.services.events import EventService
+from proctoring_api.services.object_storage import S3ObjectStorage
+from proctoring_api.services.readiness import QueueReadiness, ReadinessService
 from proctoring_api.services.sessions import SessionService
 
 
@@ -34,8 +36,14 @@ def create_runtime_app(
 
   engine = engine_factory(settings.database_url)
   sessions = SqlSessionRepository(engine)
+  storage = S3ObjectStorage(
+    settings.s3_bucket, endpoint_url=settings.s3_endpoint, region_name=settings.s3_region,
+    access_key_id=settings.s3_access_key_id, secret_access_key=settings.s3_secret_access_key,
+    force_path_style=settings.s3_force_path_style, server_side_encryption=settings.s3_server_side_encryption
+  )
   app = create_app(
     DatabaseHealthService(sessions),
+    readiness_service=ReadinessService(DatabaseHealthService(sessions), storage, QueueReadiness()),
     session_service=SessionService(sessions),
     event_service=EventService(SessionService(sessions), SqlEventRepository(engine)),
     jwt_secret=settings.jwt_secret,

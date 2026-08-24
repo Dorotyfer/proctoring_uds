@@ -33,6 +33,7 @@ class HealthService(Protocol):
 def create_app(
   health_service: HealthService,
   *,
+  readiness_service: HealthService | None = None,
   session_service: SessionService | None = None,
   event_service: EventService | None = None,
   jwt_secret: str | None = None,
@@ -43,6 +44,7 @@ def create_app(
 
   app = FastAPI()
   app.state.health_service = health_service
+  app.state.readiness_service = readiness_service
   if web_origin:
     app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=True,
       allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
@@ -67,6 +69,17 @@ def create_app(
         content={"status": "degraded", "database": "unavailable"}
       )
     return {"status": "ok", "database": "available"}
+
+  @app.get("/health/ready")
+  async def ready(request: Request) -> dict[str, str]:
+    service = request.app.state.readiness_service
+    if service is None:
+      return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={
+        "status": "degraded", "database": "unavailable", "storage": "unavailable", "queue": "unavailable"
+      })
+    statuses = await service.check()
+    response = {"status": "ok" if all(value == "available" for value in statuses.values()) else "degraded", **statuses}
+    return JSONResponse(status_code=200 if response["status"] == "ok" else 503, content=response)
 
   if session_service and event_service and jwt_secret and moodle_integration_key:
     _register_task_two_routes(
