@@ -39,6 +39,8 @@ sudo ./scripts/install-ubuntu.sh \
 
 El instalador crea una release inmutable bajo `/opt/proctoring/releases`, instala exclusivamente desde el wheelhouse con `--no-index` y el lock con `--require-hashes`, copia solo pesos cuyo SHA coincide y ejecuta `proctoring-models verify`. Luego aplica las migraciones aditivas y comprueba infraestructura antes de cambiar el symlink `current` atómicamente. Si falla el arranque posterior, restaura automáticamente la release anterior. Ni API ni worker arrancan si la verificación local falla. No existe descarga de paquetes ni modelos durante instalación o arranque.
 
+Si los archivos pasan checksum pero el runtime no puede importar o construir un modelo, el worker permanece vivo en modo degradado: registra cada trabajo como reintento durable y, en el tercer intento, aplica `block|allow_with_alert` sin necesitar los adaptadores cargados. Corrija el preload y confirme recuperación; este fallback no convierte un nodo degradado en capacidad aceptada.
+
 Instale `deploy/apache/proctoring.conf` únicamente en el vhost servido detrás del TLS institucional. El access log omite query strings y excluye por completo `/proctoring/session/{token}`; el JavaScript elimina ese bearer de la URL visible en cuanto carga la página. El gateway TLS institucional debe aplicar la misma exclusión y no registrar el path de lanzamiento. Apache no sobrescribe el CSP dinámico de FastAPI y solo publica las rutas Python declaradas.
 
 ## Operación

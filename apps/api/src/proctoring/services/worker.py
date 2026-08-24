@@ -67,7 +67,11 @@ class AnalysisWorker:
     self._preloaded = False
 
   async def run_once(self) -> bool:
-    await self._preload()
+    preload_error: AnalysisUnavailable | None = None
+    try:
+      await self._preload()
+    except Exception:
+      preload_error = AnalysisUnavailable("model_unavailable")
     job = await self._queue.claim(self._owner_token)
     if job is None:
       return False
@@ -78,6 +82,8 @@ class AnalysisWorker:
       if context_loader is not None:
         job = {**job, **await context_loader(job["id"])}
       job["frameMetadata"] = frame_metadata
+      if preload_error is not None:
+        raise preload_error
       frames = [await self._loader.load(frame) for frame in frame_metadata]
       if not await self._queue.renew_lease(job["id"], self._owner_token):
         raise AnalysisUnavailable("lease_lost")

@@ -18,7 +18,7 @@ Alcance: `565ec96d675372153978c111d9ab3cf4c138e448..HEAD`
 - El benchmark real exige manifiesto aprobado, pesos locales verificados y corpus JPEG autorizado; el modo simulado queda marcado `slaValid: false`.
 - Los artefactos directos Python tienen versión, licencia, nombre de wheel y SHA-256 en el inventario. Los pesos mantienen SHA-256 nulo y estado bloqueante hasta recibir los archivos institucionales.
 - La ruta heredada `/session/{token}` se conserva, pero Apache la excluye del access log y el navegador elimina inmediatamente el bearer de la URL visible.
-- Errores operativos de DeepFace/SSDLite se clasifican como indisponibilidad; en el tercer intento se aplica `failurePolicy`. Observaciones, eventos y alertas son idempotentes por trabajo.
+- Errores operativos de DeepFace/SSDLite y fallos totales de preload se convierten en reintentos durables; en el tercer intento se aplica `failurePolicy` sin exigir modelos cargados. Observaciones, eventos y alertas son idempotentes por trabajo.
 
 ## Evidencia ejecutada
 
@@ -26,7 +26,7 @@ Entorno local: Windows 11, Python 3.12.13 y Selenium 4.47.0.
 
 | Verificación | Resultado |
 | --- | --- |
-| `python -m pytest -q -rs` | 230 aprobadas, 4 omitidas, 0 fallidas, 0 advertencias |
+| `python -m pytest -q -rs` | 234 aprobadas, 4 omitidas, 0 fallidas, 0 advertencias |
 | Selenium con Chrome headless y cámara falsa | 1 aprobada; tres JPEG reales de 640×480 y máximo 200 KB |
 | `python -m compileall` | aprobado para fuentes y pruebas Python |
 | `python -m pip check` | ninguna dependencia instalada rota |
@@ -56,6 +56,7 @@ Omisiones reportadas por pytest:
 | --- | --- |
 | Bearer del navegador en el path registrado por Apache | `SetEnvIf` excluye la ruta completa del access log; el navegador ejecuta `history.replaceState` y el runbook exige la misma exclusión en el gateway TLS. |
 | Fallo ordinario DeepFace/Torchvision no aplicaba `failurePolicy` | Los dos adaptadores traducen fallos operativos a `AnalysisUnavailable`; el worker conserva separados los errores fuera de la frontera de inferencia. |
+| Fallo total de preload dejaba trabajos pendientes indefinidamente | El worker permanece vivo, reclama y reintenta de forma durable; al tercer intento usa un procesador de fallback que no construye adaptadores y aplica `block|allow_with_alert`. El bundle limpia cargas parciales antes de reintentar. |
 | Reintento podía duplicar observaciones/eventos/alertas | Migración 011 agrega clave única de trabajo; repositorios usan upsert e identificadores UUIDv5 deterministas. |
 | `pip install` podía consultar el índice sin verificar hashes | El instalador exige wheelhouse y lock transitivo externo, bloquea URLs/índices y usa `--no-index --require-hashes`. |
 | Posible incompatibilidad Torch/Torchvision | Refutada con metadatos del artefacto: torchvision 0.28.0 requiere exactamente torch 2.13.0; el dry-run resolvió el extra completo. |

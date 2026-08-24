@@ -35,37 +35,59 @@ class LocalModelBundle:
     self.manifest: dict | None = None
     self.deepface_adapter: DeepFaceAdapter | None = None
     self.ssdlite_adapter: SSDLiteAdapter | None = None
+    self._preloaded = False
 
   def preload(self) -> None:
-    if self.modules:
+    if self._preloaded:
       return
-    self.manifest = validate_model_manifest(self._manifest_path, require_artifacts=True)
-    if self.manifest.get("releaseReady") is not True:
-      raise ValueError("Model manifest is not release-ready")
-    model_ids = {model["id"] for model in self.manifest["models"]}
-    if not self._required_model_ids <= model_ids:
-      raise ValueError("Model manifest does not contain every required worker model")
-    weights_root = Path(self.manifest["weightsDirectory"]).resolve()
-    if weights_root.name != "weights" or weights_root.parent.name != ".deepface":
-      raise ValueError("DeepFace weightsDirectory must end in .deepface/weights")
-    os.environ["DEEPFACE_HOME"] = str(weights_root.parent.parent)
-    for name in ("cv2", "numpy", "deepface", "torch", "torchvision"):
-      self.modules[name] = self._importer(name)
-    deepface_api = getattr(self.modules["deepface"], "DeepFace", self.modules["deepface"])
-    build_model = getattr(deepface_api, "build_model", None)
-    if callable(build_model):
-      build_model(task="facial_recognition", model_name="SFace")
-      build_model(task="face_detector", model_name="yunet")
-      build_model(task="spoofing", model_name="Fasnet")
-    self.deepface_adapter = build_deepface_adapter(
-      self.modules["cv2"], self.modules["numpy"], self.modules["deepface"],
-      yunet_weights=_model_path(self.manifest, "opencv-face-detection-yunet-2023mar")
-    )
-    ssdlite_path = _model_path(self.manifest, "torchvision-ssdlite320-mobilenet-v3-large")
-    if ssdlite_path is not None:
-      self.ssdlite_adapter = build_ssdlite_adapter(
-        self.modules["torch"], self.modules["torchvision"], ssdlite_path
+    self._preloaded = False
+    self.modules = {}
+    self.manifest = None
+    self.deepface_adapter = None
+    self.ssdlite_adapter = None
+    try:
+      manifest = validate_model_manifest(self._manifest_path, require_artifacts=True)
+      if manifest.get("releaseReady") is not True:
+        raise ValueError("Model manifest is not release-ready")
+      model_ids = {model["id"] for model in manifest["models"]}
+      if not self._required_model_ids <= model_ids:
+        raise ValueError("Model manifest does not contain every required worker model")
+      weights_root = Path(manifest["weightsDirectory"]).resolve()
+      if weights_root.name != "weights" or weights_root.parent.name != ".deepface":
+        raise ValueError("DeepFace weightsDirectory must end in .deepface/weights")
+      os.environ["DEEPFACE_HOME"] = str(weights_root.parent.parent)
+      modules = {
+        name: self._importer(name)
+        for name in ("cv2", "numpy", "deepface", "torch", "torchvision")
+      }
+      deepface_api = getattr(modules["deepface"], "DeepFace", modules["deepface"])
+      build_model = getattr(deepface_api, "build_model", None)
+      if callable(build_model):
+        build_model(task="facial_recognition", model_name="SFace")
+        build_model(task="face_detector", model_name="yunet")
+        build_model(task="spoofing", model_name="Fasnet")
+      deepface_adapter = build_deepface_adapter(
+        modules["cv2"], modules["numpy"], modules["deepface"],
+        yunet_weights=_model_path(manifest, "opencv-face-detection-yunet-2023mar")
       )
+      ssdlite_path = _model_path(manifest, "torchvision-ssdlite320-mobilenet-v3-large")
+      ssdlite_adapter = None
+      if ssdlite_path is not None:
+        ssdlite_adapter = build_ssdlite_adapter(
+          modules["torch"], modules["torchvision"], ssdlite_path
+        )
+      self.manifest = manifest
+      self.modules = modules
+      self.deepface_adapter = deepface_adapter
+      self.ssdlite_adapter = ssdlite_adapter
+      self._preloaded = True
+    except Exception:
+      self.modules = {}
+      self.manifest = None
+      self.deepface_adapter = None
+      self.ssdlite_adapter = None
+      self._preloaded = False
+      raise
 
 
 def build_deepface_adapter(

@@ -28,15 +28,24 @@ class LazyRuntimeProcessor:
     self._settings = settings
     self._dependencies = dependencies
     self._processor: AnalysisProcessor | None = None
+    self._fallback_processor: AnalysisProcessor | None = None
 
   def _get(self) -> AnalysisProcessor:
     if self._processor is None:
       if self._models.deepface_adapter is None or self._models.ssdlite_adapter is None:
         raise RuntimeError("Required local models were not preloaded")
-      self._processor = AnalysisProcessor(
-        self._models.deepface_adapter, self._models.ssdlite_adapter, *self._dependencies
+      self._processor = self._build(
+        self._models.deepface_adapter, self._models.ssdlite_adapter
       )
     return self._processor
+
+  def _fallback(self) -> AnalysisProcessor:
+    if self._fallback_processor is None:
+      self._fallback_processor = self._build(None, None)
+    return self._fallback_processor
+
+  def _build(self, faces: Any, objects: Any) -> AnalysisProcessor:
+    return AnalysisProcessor(faces, objects, *self._dependencies)
 
   async def process(self, job: dict[str, Any], frames: list[bytes]) -> dict[str, Any]:
     job = {
@@ -47,10 +56,11 @@ class LazyRuntimeProcessor:
     return await self._get().process(job, frames)
 
   async def unavailable(self, job: dict[str, Any]) -> dict[str, Any]:
-    return await self._get().unavailable(job)
+    return await self._fallback().unavailable(job)
 
   async def cleanup(self, job: dict[str, Any], frames: list[dict[str, Any]], result: dict[str, Any]) -> None:
-    await self._get().cleanup(job, frames, result)
+    processor = self._processor or self._fallback()
+    await processor.cleanup(job, frames, result)
 
 
 async def run_worker(*, once: bool = False) -> None:

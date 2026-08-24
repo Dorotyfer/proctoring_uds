@@ -4,6 +4,7 @@ from hashlib import sha256
 
 from proctoring.services.evidence_crypto import EvidenceEncryptionService
 from proctoring.services.worker import AnalysisUnavailable, AnalysisWorker, StagingFrameLoader
+from proctoring.worker_main import LazyRuntimeProcessor
 
 
 class Storage:
@@ -65,6 +66,13 @@ def test_staging_loader_classifies_object_storage_failure_without_leaking_key() 
 class Models:
   def __init__(self, calls): self.calls = calls
   async def preload(self): self.calls.append("models.preload")
+
+
+class FailingModels:
+  def __init__(self, calls): self.calls = calls
+  async def preload(self):
+    self.calls.append("models.preload")
+    raise RuntimeError("private preload failure")
 
 
 class Queue:
@@ -158,3 +166,58 @@ def test_worker_never_applies_allow_policy_to_unclassified_programmer_errors() -
 
   assert "processor.unavailable" not in calls
   assert ("queue.fail", "analysis_unavailable") in calls
+
+
+def test_worker_turns_preload_failure_into_a_durable_model_retry() -> None:
+  calls = []
+  worker = AnalysisWorker(
+    Queue(calls, job(attempts=1), [{"id": "frame-1"}]),
+    FailingModels(calls), Loader(), Processor(calls),
+  )
+
+  assert asyncio.run(worker.run_once()) is True
+
+  assert calls[:2] == ["models.preload", "queue.claim"]
+  assert ("queue.fail", "model_unavailable") in calls
+  assert "processor.process" not in calls
+
+
+def test_worker_applies_failure_policy_on_final_attempt_when_preload_is_down() -> None:
+  calls = []
+  worker = AnalysisWorker(
+    Queue(calls, job(attempts=3) | {"type": "preparation"}, [{"id": "frame-1"}]),
+    FailingModels(calls), Loader(), Processor(calls),
+  )
+
+  assert asyncio.run(worker.run_once()) is True
+
+  assert "processor.unavailable" in calls
+  assert ("processor.cleanup", 1) in calls
+  assert any(isinstance(item, tuple) and item[0] == "queue.complete" for item in calls)
+  assert not any(isinstance(item, tuple) and item[0] == "queue.fail" for item in calls)
+
+
+def test_lazy_runtime_fallback_does_not_require_preloaded_model_adapters() -> None:
+  calls = []
+
+  class ModelsWithoutAdapters:
+    deepface_adapter = None
+    ssdlite_adapter = None
+
+  class PreparationFallback:
+    async def unavailable(self, session_id, job_id, policy):
+      calls.append((session_id, job_id, policy))
+      return {"technicalAlert": True, "policy": policy}
+
+  processor = LazyRuntimeProcessor(
+    ModelsWithoutAdapters(), object(), object(), PreparationFallback(),
+    object(), object(), object(), object(),
+  )
+
+  result = asyncio.run(processor.unavailable({
+    "id": "job-1", "sessionId": "session-1", "type": "preparation",
+    "failurePolicy": "allow_with_alert",
+  }))
+
+  assert result == {"technicalAlert": True, "policy": "allow_with_alert"}
+  assert calls == [("session-1", "job-1", "allow_with_alert")]

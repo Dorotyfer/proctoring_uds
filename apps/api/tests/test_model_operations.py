@@ -65,8 +65,33 @@ def test_local_model_bundle_imports_heavy_packages_only_during_explicit_preload(
 
   assert imported == []
   bundle.preload()
+  bundle.preload()
 
   assert imported == ["cv2", "numpy", "deepface", "torch", "torchvision"]
+
+
+def test_local_model_bundle_clears_partial_runtime_after_preload_failure(tmp_path: Path) -> None:
+  destination = tmp_path / ".deepface" / "weights"
+  destination.mkdir(parents=True)
+  artifact = destination / "weight.bin"
+  artifact.write_bytes(b"approved-weight")
+  digest = hashlib.sha256(b"approved-weight").hexdigest()
+  manifest_path = manifest(tmp_path / "manifest.json", tmp_path, destination, digest)
+
+  def fail_on_numpy(name: str) -> object:
+    if name == "numpy":
+      raise RuntimeError("runtime unavailable")
+    return object()
+
+  bundle = LocalModelBundle(manifest_path, importer=fail_on_numpy)
+
+  with pytest.raises(RuntimeError, match="runtime unavailable"):
+    bundle.preload()
+
+  assert bundle.modules == {}
+  assert bundle.manifest is None
+  assert bundle.deepface_adapter is None
+  assert bundle.ssdlite_adapter is None
 
 
 def test_benchmark_reports_capacity_formula_and_invalidates_fake_runs_for_sla() -> None:
