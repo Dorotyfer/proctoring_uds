@@ -7,9 +7,11 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
+EXACT_VERSION = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._+-]*$")
 
 
 class ManifestValidationError(ValueError):
@@ -22,6 +24,9 @@ def validate_inventory(path: Path, release_mode: bool = False) -> dict[str, Any]
   inventory = _load_object(path, "inventory")
   if inventory.get("version") != 1:
     raise ManifestValidationError("inventory.version must be 1")
+  if not isinstance(inventory.get("releaseReady"), bool):
+    raise ManifestValidationError("inventory.releaseReady must be a boolean")
+  strict_release = release_mode or inventory["releaseReady"]
 
   for collection in ("packages", "models"):
     entries = inventory.get(collection)
@@ -30,10 +35,8 @@ def validate_inventory(path: Path, release_mode: bool = False) -> dict[str, Any]
     for index, entry in enumerate(entries):
       if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
         raise ManifestValidationError(f"inventory.{collection}[{index}] must name an artifact")
-      if release_mode and not _is_sha256(entry.get("sha256")):
-        raise ManifestValidationError(
-          f"inventory.{collection}[{index}].sha256 must be a 64-character SHA-256"
-        )
+      if strict_release:
+        _validate_release_artifact(entry, collection, index)
 
   if release_mode and inventory.get("releaseReady") is not True:
     raise ManifestValidationError("inventory.releaseReady must be true for release mode")
@@ -120,6 +123,39 @@ def _file_sha256(path: Path) -> str:
 
 def _is_sha256(value: object) -> bool:
   return isinstance(value, str) and bool(SHA256.fullmatch(value))
+
+
+def _validate_release_artifact(entry: dict[str, Any], collection: str, index: int) -> None:
+  location = f"inventory.{collection}[{index}]"
+  if not isinstance(entry.get("name"), str) or not entry["name"].strip():
+    raise ManifestValidationError(f"{location}.name must identify an artifact")
+  if not isinstance(entry.get("version"), str) or not EXACT_VERSION.fullmatch(entry["version"]):
+    raise ManifestValidationError(f"{location}.version must be an exact version")
+  if not _is_provenance_url(entry.get("source")):
+    raise ManifestValidationError(f"{location}.source must be an absolute HTTP(S) provenance URL")
+  if not isinstance(entry.get("license"), str) or not entry["license"].strip():
+    raise ManifestValidationError(f"{location}.license must identify the artifact license")
+  if entry.get("status") != "approved":
+    raise ManifestValidationError(f"{location}.status must be approved for release")
+  if not _is_sha256(entry.get("sha256")):
+    raise ManifestValidationError(f"{location}.sha256 must be a 64-character SHA-256")
+
+
+def _is_provenance_url(value: object) -> bool:
+  if not isinstance(value, str):
+    return False
+  try:
+    parsed = urlsplit(value)
+    port = parsed.port
+  except ValueError:
+    return False
+  return (
+    parsed.scheme in {"http", "https"}
+    and bool(parsed.hostname)
+    and parsed.username is None
+    and parsed.password is None
+    and (port is None or 1 <= port <= 65535)
+  )
 
 
 if __name__ == "__main__":

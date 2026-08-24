@@ -5,7 +5,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from proctoring_api.models import CreateSessionInput, FailurePolicy, SessionEventInput
+from proctoring_api.models import (
+  CreateSessionInput,
+  FailurePolicy,
+  ProctoringSession,
+  SessionEventInput
+)
 
 
 def valid_session_payload() -> dict[str, str | None]:
@@ -95,6 +100,33 @@ def test_session_contract_trims_legacy_strings_and_rejects_whitespace_only_value
   payload["studentName"] = " \t "
   with pytest.raises(ValidationError):
     CreateSessionInput(**payload)
+
+
+def test_persisted_session_normalizes_created_at_and_round_trips_json_wire_format() -> None:
+  payload = valid_session_payload()
+  payload.update({
+    "id": "3014bd0b-2985-4230-9214-2809c13c8b95",
+    "status": "pending",
+    "createdAt": "2026-08-24T15:15:00+03:00"
+  })
+
+  session = ProctoringSession.model_validate_json(json.dumps(payload))
+  wire = json.loads(session.model_dump_json(by_alias=True))
+
+  assert session.created_at == datetime(2026, 8, 24, 12, 15, tzinfo=UTC)
+  assert wire["createdAt"] == "2026-08-24T12:15:00Z"
+
+
+def test_persisted_session_rejects_a_naive_created_at_timestamp() -> None:
+  payload = valid_session_payload()
+  payload.update({
+    "id": "3014bd0b-2985-4230-9214-2809c13c8b95",
+    "status": "pending",
+    "createdAt": "2026-08-24T12:15:00"
+  })
+
+  with pytest.raises(ValidationError, match="RFC3339"):
+    ProctoringSession.model_validate_json(json.dumps(payload))
 
 
 def test_event_contract_defaults_empty_metadata_and_rejects_large_metadata() -> None:

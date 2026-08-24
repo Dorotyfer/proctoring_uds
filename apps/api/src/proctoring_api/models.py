@@ -127,6 +127,11 @@ class ProctoringSession(CreateSessionInput):
   status: SessionStatus
   created_at: datetime = Field(validation_alias="createdAt", serialization_alias="createdAt")
 
+  @field_validator("created_at", mode="before")
+  @classmethod
+  def parse_wire_datetime(cls, value: object) -> datetime:
+    return _parse_rfc3339_datetime(value)
+
 
 class SessionEventInput(BaseModel):
   """A non-visual event reported by a browser or SEB client."""
