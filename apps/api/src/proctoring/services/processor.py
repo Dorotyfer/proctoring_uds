@@ -44,7 +44,8 @@ class AnalysisProcessor:
       raise ValueError("Unsupported analysis job")
     observed_at = job.get("observedAt") or datetime.now(UTC)
     confirmation = await self._confirmations.observe(
-      job["sessionId"], {"analysis_unavailable"}, observed_at
+      job["sessionId"], {"analysis_unavailable"}, observed_at,
+      observation_id=job["id"],
     )
     confirmed = sorted(name for name in confirmation.confirmed if name == "analysis_unavailable")
     for event_type in confirmed:
@@ -116,7 +117,9 @@ class AnalysisProcessor:
       )
       if not matched:
         anomalies.add("biometric_monitor_mismatch")
-    confirmation = await self._confirmations.observe(job["sessionId"], anomalies, observed_at)
+    confirmation = await self._confirmations.observe(
+      job["sessionId"], anomalies, observed_at, observation_id=job["id"]
+    )
     confirmed = sorted(name for name in confirmation.confirmed if name in ALLOWED_ANOMALIES)
     for event_type in confirmed:
       await self._monitoring_effects.emit(job, event_type, frame)

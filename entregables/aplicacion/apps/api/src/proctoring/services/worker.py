@@ -7,12 +7,7 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from proctoring.services.evidence_crypto import EvidenceCryptoError, EvidenceEncryptionService
-
-
-class AnalysisUnavailable(RuntimeError):
-  def __init__(self, code: str = "analysis_unavailable") -> None:
-    self.code = code if _safe_code(code) else "analysis_unavailable"
-    super().__init__("Analysis unavailable")
+from proctoring.services.errors import AnalysisUnavailable
 
 
 class StagingFrameLoader:
@@ -127,7 +122,3 @@ class AnalysisWorker:
     finally:
       if not processing.done():
         processing.cancel()
-
-
-def _safe_code(value: str) -> bool:
-  return isinstance(value, str) and value.isascii() and len(value) <= 64 and value.replace("_", "").isalnum()

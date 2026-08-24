@@ -35,13 +35,21 @@ class SqlMonitoringRepository:
       """), {"session_id": session_id, "now": now, "cutoff": now - interval})
       return result.rowcount == 1
 
-  async def observe(self, session_id: str, anomalies: set[str], observed_at: datetime) -> set[str]:
+  async def observe(
+    self, session_id: str, anomalies: set[str], observed_at: datetime,
+    observation_id: str | None = None,
+  ) -> set[str]:
     async with self._engine.begin() as connection:
       await connection.execute(text("""
-        INSERT INTO proctoring_monitoring_observations (id, session_id, anomalies, observed_at)
-        VALUES (:id, :session_id, :anomalies, :observed_at)
-      """), {"id": str(uuid4()), "session_id": session_id, "anomalies": json.dumps(sorted(anomalies)),
-        "observed_at": observed_at})
+        INSERT INTO proctoring_monitoring_observations (
+          id, session_id, job_id, anomalies, observed_at
+        ) VALUES (:id, :session_id, :job_id, :anomalies, :observed_at)
+        ON DUPLICATE KEY UPDATE
+          anomalies = VALUES(anomalies), observed_at = VALUES(observed_at)
+      """), {
+        "id": str(uuid4()), "session_id": session_id, "job_id": observation_id,
+        "anomalies": json.dumps(sorted(anomalies)), "observed_at": observed_at,
+      })
       result = await connection.execute(text("""
         SELECT anomalies FROM proctoring_monitoring_observations
         WHERE session_id = :session_id ORDER BY observed_at DESC, id DESC LIMIT 3

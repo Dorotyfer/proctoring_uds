@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Sequence
 
+from proctoring.services.errors import AnalysisUnavailable
+
 
 COCO_RELEVANT_CLASSES = {1: "person", 72: "tv", 73: "laptop", 77: "cell phone", 84: "book"}
 
@@ -19,15 +21,20 @@ class SSDLiteAdapter:
     self._infer = infer
 
   def detect(self, frame: bytes) -> tuple[ObjectDetection, ...]:
-    relevant = []
-    for raw in self._infer(frame):
-      label = int(raw["label"])
-      score = float(raw["score"])
-      name = COCO_RELEVANT_CLASSES.get(label)
-      threshold = 0.70 if name == "person" else 0.60
-      if name is not None and score >= threshold:
-        relevant.append(ObjectDetection(name, score, tuple(float(value) for value in raw["box"])))
-    return tuple(relevant)
+    try:
+      relevant = []
+      for raw in self._infer(frame):
+        label = int(raw["label"])
+        score = float(raw["score"])
+        name = COCO_RELEVANT_CLASSES.get(label)
+        threshold = 0.70 if name == "person" else 0.60
+        if name is not None and score >= threshold:
+          relevant.append(ObjectDetection(name, score, tuple(float(value) for value in raw["box"])))
+      return tuple(relevant)
+    except AnalysisUnavailable:
+      raise
+    except Exception as error:
+      raise AnalysisUnavailable("model_unavailable") from error
 
   @staticmethod
   def anomaly(detections: Sequence[ObjectDetection]) -> str | None:

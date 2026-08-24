@@ -11,7 +11,10 @@ ALLOWED_ANOMALIES = frozenset({
 
 
 class ConfirmationRepository(Protocol):
-  async def observe(self, session_id: str, anomalies: set[str], observed_at: datetime) -> set[str]: ...
+  async def observe(
+    self, session_id: str, anomalies: set[str], observed_at: datetime,
+    observation_id: str | None = None,
+  ) -> set[str]: ...
 
 
 @dataclass(frozen=True)
@@ -25,10 +28,15 @@ class ConfirmationService:
   def __init__(self, repository: ConfirmationRepository) -> None:
     self._repository = repository
 
-  async def observe(self, session_id: str, anomalies: Set[str], observed_at: datetime) -> ConfirmationResult:
+  async def observe(
+    self, session_id: str, anomalies: Set[str], observed_at: datetime,
+    *, observation_id: str | None = None,
+  ) -> ConfirmationResult:
     if not anomalies <= ALLOWED_ANOMALIES:
       raise ValueError("Unsupported monitoring anomaly")
-    confirmed = await self._repository.observe(session_id, set(anomalies), observed_at)
+    confirmed = await self._repository.observe(
+      session_id, set(anomalies), observed_at, observation_id
+    )
     return ConfirmationResult(
       frozenset(confirmed), 2 if anomalies and not confirmed else 0, 2
     )

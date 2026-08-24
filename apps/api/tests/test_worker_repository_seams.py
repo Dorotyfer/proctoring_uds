@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 from proctoring.repositories.analysis import SqlAnalysisRepository
+from proctoring.repositories.effects import SqlAnalysisEffectsRepository
 from proctoring.repositories.monitoring import SqlMonitoringRepository
 
 
@@ -85,3 +86,43 @@ def test_monitoring_repository_does_not_confirm_before_full_three_observation_wi
   ))
 
   assert confirmed == set()
+
+
+def test_monitoring_observation_is_idempotent_for_the_analysis_job() -> None:
+  engine = Engine([
+    Result(), Result([{"anomalies": '["environment_intrusion"]'}]), Result(),
+  ])
+
+  asyncio.run(SqlMonitoringRepository(engine).observe(
+    "session-1", {"environment_intrusion"}, datetime(2026, 8, 24, 12, 0, tzinfo=UTC),
+    observation_id="job-1",
+  ))
+
+  insert, parameters = engine.connection.statements[0]
+  assert "job_id" in insert
+  assert "ON DUPLICATE KEY UPDATE" in insert
+  assert parameters["job_id"] == "job-1"
+
+
+def test_inference_event_and_alert_use_deterministic_ids_and_upserts() -> None:
+  engine = Engine([Result(), Result(), Result(), Result()])
+  repository = SqlAnalysisEffectsRepository(engine, object())
+
+  first = asyncio.run(repository.create_event_alert(
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+    "environment_intrusion",
+  ))
+  second = asyncio.run(repository.create_event_alert(
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+    "environment_intrusion",
+  ))
+
+  assert first == second
+  event_statements = engine.connection.statements[::2]
+  alert_statements = engine.connection.statements[1::2]
+  assert all("ON DUPLICATE KEY UPDATE" in statement for statement, _ in event_statements)
+  assert all("ON DUPLICATE KEY UPDATE" in statement for statement, _ in alert_statements)
+  assert event_statements[0][1]["id"] == event_statements[1][1]["id"]
+  assert alert_statements[0][1]["id"] == alert_statements[1][1]["id"]

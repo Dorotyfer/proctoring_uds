@@ -48,7 +48,7 @@ class Cadence:
 
 class Confirmations:
   def __init__(self, confirmed=()): self.confirmed = frozenset(confirmed); self.observed = []
-  async def observe(self, session_id, anomalies, observed_at):
+  async def observe(self, session_id, anomalies, observed_at, *, observation_id=None):
     self.observed.append(anomalies)
     return ConfirmationResult(self.confirmed, 2 if anomalies and not self.confirmed else 0, 2)
 

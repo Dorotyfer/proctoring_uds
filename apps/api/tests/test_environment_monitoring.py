@@ -36,7 +36,7 @@ class ConfirmationRepository:
   def __init__(self) -> None:
     self.windows = {}
 
-  async def observe(self, session_id, anomalies, observed_at):
+  async def observe(self, session_id, anomalies, observed_at, observation_id=None):
     window = self.windows.setdefault(session_id, [])
     window.append(set(anomalies))
     del window[:-3]

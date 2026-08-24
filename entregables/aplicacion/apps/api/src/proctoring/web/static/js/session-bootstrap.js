@@ -8,6 +8,8 @@ const values = {
   returnUrl: bootstrap.dataset.returnUrl || null,
   token: bootstrap.dataset.token
 };
+const sanitizedSessionPath = window.location.pathname.replace(/\/session\/[^/]+\/?$/, '/session');
+window.history.replaceState(null, '', sanitizedSessionPath);
 bootstrap.remove();
 
 try {

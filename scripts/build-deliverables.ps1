@@ -102,7 +102,7 @@ function Assert-ApplicationDeliverable {
     'apps/api/src/proctoring/web/templates/session.html',
     'apps/api/src/proctoring/web/static/js/preparation.js',
     'apps/api/migrations/001_sessions.sql',
-    'apps/api/migrations/010_worker_monitoring_state.sql',
+    'apps/api/migrations/011_effect_idempotency.sql',
     'apps/api/licenses/inventory.json',
     'apps/api/config/model-weights.example.json',
     'deploy/systemd/proctoring-api.service',

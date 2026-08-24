@@ -143,6 +143,8 @@ def test_center_turn_center_uses_three_real_bounded_640_by_480_jpegs(live_ui, br
   token = issue_browser_token(str(sessions.id), "attempt-selenium", "browser", SECRET)
   browser.get(f"{origin}/session/{token}?returnUrl={origin}/moodle/continue")
   wait = WebDriverWait(browser, 15)
+  wait.until(lambda driver: driver.current_url.endswith("/session"))
+  assert token not in browser.current_url
 
   consent = wait.until(conditions.element_to_be_clickable((By.ID, "biometric-consent")))
   consent.click()

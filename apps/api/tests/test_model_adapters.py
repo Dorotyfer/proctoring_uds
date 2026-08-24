@@ -1,6 +1,9 @@
 from contextlib import contextmanager
 
+import pytest
+
 from proctoring.model_runtime import build_deepface_adapter, build_ssdlite_adapter
+from proctoring.services.worker import AnalysisUnavailable
 
 
 class Numpy:
@@ -46,6 +49,20 @@ def test_deepface_preloaded_adapter_uses_sface_yunet_and_fasnet_anti_spoofing() 
   assert represent[1]["model_name"] == "SFace"
   assert represent[1]["detector_backend"] == "skip"
   assert face.is_real is True
+
+
+def test_deepface_runtime_failure_is_classified_as_analysis_unavailable() -> None:
+  class FailingDeepFace:
+    @staticmethod
+    def extract_faces(**kwargs):
+      raise RuntimeError("backend failure with private details")
+
+  adapter = build_deepface_adapter(Cv2(), Numpy(), FailingDeepFace())
+
+  with pytest.raises(AnalysisUnavailable, match="^Analysis unavailable$") as raised:
+    adapter.analyze(b"private-jpeg")
+  assert raised.value.code == "model_unavailable"
+  assert "private" not in repr(raised.value)
 
 
 class Tensor:
@@ -97,3 +114,20 @@ def test_ssdlite_preloaded_adapter_loads_local_weights_and_uses_eval_inference_m
   assert model.evaluated is True
   assert torch.inference_entries == 1
   assert [item.name for item in detected] == ["person", "cell phone"]
+
+
+def test_ssdlite_runtime_failure_is_classified_as_analysis_unavailable(tmp_path) -> None:
+  class FailingModel(Model):
+    def __call__(self, tensors):
+      raise RuntimeError("tensor failure with private details")
+
+  weight = tmp_path / "ssdlite.pth"
+  weight.write_bytes(b"local")
+  adapter = build_ssdlite_adapter(
+    Torch(), Torchvision(Detection(FailingModel())), weight, decoder=lambda _: "tensor"
+  )
+
+  with pytest.raises(AnalysisUnavailable, match="^Analysis unavailable$") as raised:
+    adapter.detect(b"private-jpeg")
+  assert raised.value.code == "model_unavailable"
+  assert "private" not in repr(raised.value)

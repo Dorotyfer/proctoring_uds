@@ -10,6 +10,8 @@ from typing import Callable, Iterable, Sequence
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from proctoring.services.errors import AnalysisUnavailable
+
 
 SFACE_MODEL = "SFace"
 SFACE_DETECTOR = "yunet"
@@ -55,7 +57,12 @@ class DeepFaceAdapter:
     self._infer = infer
 
   def analyze(self, frame: bytes) -> AnalyzedFace:
-    faces = list(self._infer(frame))
+    try:
+      faces = list(self._infer(frame))
+    except AnalysisUnavailable:
+      raise
+    except Exception as error:
+      raise AnalysisUnavailable("model_unavailable") from error
     if not faces:
       raise FaceAnalysisError("face_absent", "Exactly one face is required")
     if len(faces) != 1:

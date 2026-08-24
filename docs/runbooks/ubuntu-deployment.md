@@ -6,6 +6,7 @@
 - Usuario de base de datos limitado al esquema de proctoring.
 - Los cuatro grupos de pesos aprobados: YuNet, SFace, ambos archivos FasNet y SSDLite.
 - Manifiesto `releaseReady: true` con SHA-256 reales. Un nombre de archivo o hash faltante bloquea el despliegue.
+- Wheelhouse institucional completo para CPython 3.12/Ubuntu x86_64 y lock transitivo con `--hash=sha256` para cada artefacto. El lock no puede incluir índices, URLs, editables ni fuentes remotas.
 
 ## Secretos y configuración
 
@@ -31,12 +32,14 @@ sudo ./scripts/install-ubuntu.sh \
   --source "$PWD" \
   --env /ruta/segura/proctoring.env \
   --manifest /ruta/segura/model-weights.json \
-  --models-source /medio/offline/modelos
+  --models-source /medio/offline/modelos \
+  --wheelhouse /medio/offline/wheelhouse \
+  --requirements-lock /medio/offline/requirements-ubuntu-py312.lock
 ```
 
-El instalador crea una release inmutable bajo `/opt/proctoring/releases`, instala el extra Python `vision`, copia solo pesos cuyo SHA coincide y ejecuta `proctoring-models verify`. Luego aplica las migraciones aditivas y comprueba infraestructura antes de cambiar el symlink `current` atómicamente. Si falla el arranque posterior, restaura automáticamente la release anterior. Ni API ni worker arrancan si la verificación local falla. No existe descarga de modelos durante el arranque.
+El instalador crea una release inmutable bajo `/opt/proctoring/releases`, instala exclusivamente desde el wheelhouse con `--no-index` y el lock con `--require-hashes`, copia solo pesos cuyo SHA coincide y ejecuta `proctoring-models verify`. Luego aplica las migraciones aditivas y comprueba infraestructura antes de cambiar el symlink `current` atómicamente. Si falla el arranque posterior, restaura automáticamente la release anterior. Ni API ni worker arrancan si la verificación local falla. No existe descarga de paquetes ni modelos durante instalación o arranque.
 
-Instale `deploy/apache/proctoring.conf` únicamente en el vhost servido detrás del TLS institucional. El formato de access log usa `%U`, no registra query strings y por tanto evita registrar tokens SSO. Apache no sobrescribe el CSP dinámico de FastAPI y solo publica las rutas Python declaradas.
+Instale `deploy/apache/proctoring.conf` únicamente en el vhost servido detrás del TLS institucional. El access log omite query strings y excluye por completo `/proctoring/session/{token}`; el JavaScript elimina ese bearer de la URL visible en cuanto carga la página. El gateway TLS institucional debe aplicar la misma exclusión y no registrar el path de lanzamiento. Apache no sobrescribe el CSP dinámico de FastAPI y solo publica las rutas Python declaradas.
 
 ## Operación
 

@@ -367,6 +367,7 @@ systemd --> proctoring-api
     "Moodle institucional compatible con los plugins entregados.",
     "HTTPS valido y DNS para Moodle y proctoring.",
     "Pesos aprobados YuNet, SFace, FasNet y SSDLite con SHA-256 reales.",
+    "Wheelhouse CPython 3.12 completo y lock transitivo con SHA-256, sin URLs ni indices.",
     "Cuenta S3 de minimo privilegio y bucket sin acceso publico.",
     "Workers = ceil(15 / rendimiento_mixto_por_worker), reservando 30% de RAM.",
   ], note=("Gate", "Si un nodo no sostiene 10 frames/s mas 50% de margen, agregue otro nodo; no reduzca frecuencia ni precision.", "warning"))
@@ -387,7 +388,9 @@ sudo bash scripts/install-ubuntu.sh \
   --source /ruta/release \
   --env /etc/proctoring/proctoring.env \
   --manifest /ruta/model-weights.json \
-  --models-source /ruta/modelos-offline
+  --models-source /ruta/modelos-offline \
+  --wheelhouse /ruta/wheelhouse \
+  --requirements-lock /ruta/requirements-ubuntu-py312.lock
 """)
   callout(document, "Minimo privilegio", "No reutilice la base, usuario o secretos de Moodle. MariaDB y S3 deben permanecer fuera de Internet.", "danger")
 
@@ -421,7 +424,7 @@ sudo -u proctoring /opt/proctoring/current/venv/bin/proctoring-benchmark \
   section(document, "7. Apache y servicios", "Los archivos de deploy incluyen API, worker y timers separados y endurecidos.", [
     "Apache elimina /proctoring/ y /proctoring-api/ antes de enviar a Uvicorn.",
     "No existe /_next/ ni una aplicacion web separada.",
-    "El access log omite query strings y Referer para no registrar tokens.",
+    "El access log excluye la ruta /session/{token}; el gateway TLS debe hacer lo mismo.",
     "FastAPI conserva CSP por pagina, frame-ancestors, Permissions-Policy y no-store.",
     "Los timers ejecutan check-infra, purge-staging y purge de evidencia.",
   ], commands="""
@@ -513,7 +516,7 @@ proctoring-load
 
   document.add_page_break()
   section(document, "15. Lista de puesta en marcha", "No habilite examenes reales hasta cerrar todos los gates.", [
-    "Release Python-only instalado y migraciones 001-010 aplicadas.",
+    "Release Python-only instalado y migraciones 001-011 aplicadas.",
     "MariaDB y S3 privados, cifrado y retencion verificados.",
     "Pesos aprobados, licencias y SHA-256 comprobados sin red.",
     "Apache y unidades/timers validados en Ubuntu.",

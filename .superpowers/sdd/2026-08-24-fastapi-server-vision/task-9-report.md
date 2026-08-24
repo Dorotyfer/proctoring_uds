@@ -35,7 +35,7 @@ All tracked removals are recoverable from Git. Legacy SQL tables/migrations and 
 
 | Deliverable | Contents | Exclusions enforced |
 | --- | --- | --- |
-| `entregables/aplicacion` | Full `proctoring` Python source, `pyproject.toml`, migrations 001–010, model config example, license inventory, Apache/systemd files, Ubuntu scripts, Jinja2 templates, CSS and native ES modules | tests, caches, virtual environments, secrets, private keys, model weights, retired web runtimes and legacy package name |
+| `entregables/aplicacion` | Full `proctoring` Python source, `pyproject.toml`, migrations 001–011, model config example, license inventory, Apache/systemd files, Ubuntu scripts, Jinja2 templates, CSS and native ES modules | tests, caches, virtual environments, secrets, private keys, model weights, retired web runtimes and legacy package name |
 | `entregables/moodle/local_proctoring` | Synchronized `apps/moodle/local/proctoring` tree | unrelated application source |
 | `entregables/moodle/quizaccess_proctoring` | Synchronized quiz access plugin tree | unrelated application source |
 | both Moodle ZIPs | Deterministic sorted entries under top-level `proctoring/` | invalid ZIP roots |
