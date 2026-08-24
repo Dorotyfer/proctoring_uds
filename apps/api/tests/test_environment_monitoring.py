@@ -1,8 +1,8 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from proctoring_api.services.monitoring import ConfirmationService, MonitoringCadence
-from proctoring_api.services.objects import SSDLiteAdapter
+from proctoring.services.monitoring import ConfirmationService, MonitoringCadence
+from proctoring.services.objects import SSDLiteAdapter
 
 
 def test_ssdlite_filters_coco_classes_with_class_specific_inclusive_thresholds() -> None:

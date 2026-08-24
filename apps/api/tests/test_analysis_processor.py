@@ -2,9 +2,9 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from proctoring_api.services.monitoring import ConfirmationResult
-from proctoring_api.services.processor import AnalysisProcessor
-from proctoring_api.services.vision import AnalyzedFace, FaceAnalysisError, FaceLandmarks
+from proctoring.services.monitoring import ConfirmationResult
+from proctoring.services.processor import AnalysisProcessor
+from proctoring.services.vision import AnalyzedFace, FaceAnalysisError, FaceLandmarks
 
 
 def analyzed(nose=(50.0, 55.0)):

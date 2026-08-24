@@ -1,7 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 
-from proctoring_api.repositories.analysis import SqlAnalysisRepository
+from proctoring.repositories.analysis import SqlAnalysisRepository
 
 
 class Result:

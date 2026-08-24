@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from proctoring_api.models import (
+from proctoring.models import (
   CreateSessionInput,
   FailurePolicy,
   ProctoringSession,

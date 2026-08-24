@@ -1,8 +1,8 @@
 import asyncio
 import math
 
-from proctoring_api.services.profiles import MonitoringIdentityService, SFaceProfileService
-from proctoring_api.services.vision import DescriptorCipher, SFaceVerifier
+from proctoring.services.profiles import MonitoringIdentityService, SFaceProfileService
+from proctoring.services.vision import DescriptorCipher, SFaceVerifier
 
 
 class ProfileRepository:

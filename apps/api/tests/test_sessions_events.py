@@ -5,11 +5,11 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from proctoring_api.app import create_app
-from proctoring_api.auth import decode_browser_token
-from proctoring_api.models import CreateSessionInput, ProctoringSession, SessionStatus
-from proctoring_api.services.events import EventService
-from proctoring_api.services.sessions import SessionService
+from proctoring.app import create_app
+from proctoring.auth import decode_browser_token
+from proctoring.models import CreateSessionInput, ProctoringSession, SessionStatus
+from proctoring.services.events import EventService
+from proctoring.services.sessions import SessionService
 
 
 SESSION_ID = UUID("e3d9cce1-a5b8-4bfe-88e1-68a57475266d")
@@ -182,7 +182,7 @@ def test_event_service_rejects_inactive_or_out_of_window_events_before_persisten
 
 def test_event_service_rejects_a_session_completed_after_the_browser_loaded() -> None:
   import asyncio
-  from proctoring_api.services.events import SessionUnavailableError
+  from proctoring.services.events import SessionUnavailableError
 
   sessions = SessionRepositoryFake()
   service = EventService(SessionService(sessions), EventRepositoryFake())
@@ -332,7 +332,7 @@ def test_uppercase_canonical_uuid_is_normalized_for_lookup_and_token_ownership()
 def test_locked_unavailable_event_is_mapped_to_409_before_broad_value_errors() -> None:
   class UnavailableEvents:
     async def record(self, *_):
-      from proctoring_api.services.events import SessionUnavailableError
+      from proctoring.services.events import SessionUnavailableError
       raise SessionUnavailableError("locked session completed")
 
   sessions = SessionRepositoryFake()

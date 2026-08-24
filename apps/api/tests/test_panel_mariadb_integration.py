@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from proctoring_api.db.engine import create_mariadb_engine
-from proctoring_api.repositories.panel import SqlPanelRepository
+from proctoring.db.engine import create_mariadb_engine
+from proctoring.repositories.panel import SqlPanelRepository
 
 
 @pytest.mark.integration

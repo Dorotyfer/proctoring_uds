@@ -3,9 +3,9 @@ import asyncio
 from fastapi.testclient import TestClient
 import pytest
 
-from proctoring_api.config import Settings
-from proctoring_api.main import RuntimeDependencies, create_runtime_app
-from proctoring_api.db.engine import create_mariadb_engine
+from proctoring.config import Settings
+from proctoring.main import RuntimeDependencies, create_runtime_app
+from proctoring.db.engine import create_mariadb_engine
 
 
 def environment() -> dict[str, str]:
@@ -111,7 +111,7 @@ def test_mariadb_engine_configures_utc_for_each_new_connection(monkeypatch) -> N
     captured["url"] = url
     captured["kwargs"] = kwargs
     return object()
-  monkeypatch.setattr("proctoring_api.db.engine.create_async_engine", fake_create_async_engine)
+  monkeypatch.setattr("proctoring.db.engine.create_async_engine", fake_create_async_engine)
 
   create_mariadb_engine("mysql://service:password@database.example.edu/proctoring")
 

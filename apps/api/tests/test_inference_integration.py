@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from proctoring_api.manifest import ManifestValidationError, validate_model_manifest
-from proctoring_api.model_runtime import LocalModelBundle
+from proctoring.manifest import ManifestValidationError, validate_model_manifest
+from proctoring.model_runtime import LocalModelBundle
 
 
 @pytest.mark.inference

@@ -8,7 +8,7 @@ from botocore.exceptions import (
   ClientError, EndpointConnectionError, NoCredentialsError, ParamValidationError, PartialCredentialsError
 )
 
-from proctoring_api.services.evidence_crypto import EvidenceCryptoError, EvidenceEncryptionService
+from proctoring.services.evidence_crypto import EvidenceCryptoError, EvidenceEncryptionService
 
 
 # NIST SP 800-38D AES-256-GCM known-answer vector. Node's frozen
@@ -81,7 +81,7 @@ class StrictS3Client:
 
 
 def test_s3_retries_only_retryable_failures_and_keeps_encrypted_content_type() -> None:
-  from proctoring_api.services.object_storage import S3ObjectStorage
+  from proctoring.services.object_storage import S3ObjectStorage
 
   failure = EndpointConnectionError(endpoint_url="https://s3.example.edu")
   client = StrictS3Client([failure, failure, {}])
@@ -97,7 +97,7 @@ def test_s3_retries_only_retryable_failures_and_keeps_encrypted_content_type() -
 
 
 def test_s3_retries_client_503_exactly_three_times() -> None:
-  from proctoring_api.services.object_storage import S3ObjectStorage
+  from proctoring.services.object_storage import S3ObjectStorage
 
   failure = ClientError({"Error": {"Code": "ServiceUnavailable"}, "ResponseMetadata": {"HTTPStatusCode": 503}}, "PutObject")
   client = StrictS3Client([failure, failure, {}])
@@ -109,7 +109,7 @@ def test_s3_retries_client_503_exactly_three_times() -> None:
 
 
 def test_s3_does_not_retry_authorization_or_invalid_keys() -> None:
-  from proctoring_api.services.object_storage import ObjectStorageError, S3ObjectStorage, StorageValidationError
+  from proctoring.services.object_storage import ObjectStorageError, S3ObjectStorage, StorageValidationError
 
   client = StrictS3Client([AuthorizationFailure()])
   storage = S3ObjectStorage("evidence", client=client, retry_delay=lambda _: None)
@@ -127,7 +127,7 @@ def test_s3_does_not_retry_authorization_or_invalid_keys() -> None:
   ParamValidationError(report="invalid request")
 ])
 def test_s3_does_not_retry_credential_or_sdk_validation_failures(failure: Exception) -> None:
-  from proctoring_api.services.object_storage import ObjectStorageError, S3ObjectStorage
+  from proctoring.services.object_storage import ObjectStorageError, S3ObjectStorage
 
   client = StrictS3Client([failure])
   storage = S3ObjectStorage("evidence", client=client, retry_delay=lambda _: None)
@@ -213,7 +213,7 @@ class StrictEvidenceRepository:
 
 
 def evidence_service(storage: StrictStorage | None = None, repository: StrictEvidenceRepository | None = None):
-  from proctoring_api.services.evidence import EvidenceService
+  from proctoring.services.evidence import EvidenceService
   return EvidenceService(
     EvidenceEncryptionService(bytes([7]) * 32), storage or StrictStorage(), repository or StrictEvidenceRepository(),
     retention_days=30, content_token_secret="evidence-content-token-secret-at-least-32", now=lambda: datetime.now(UTC)
@@ -320,7 +320,7 @@ def test_evidence_access_requires_alert_course_scope_and_audits_view_and_downloa
 
 
 def test_evidence_content_fails_closed_for_invalid_token_and_unauthorized_scope() -> None:
-  from proctoring_api.services.evidence import EvidenceAccessError
+  from proctoring.services.evidence import EvidenceAccessError
 
   storage = StrictStorage()
   repository = StrictEvidenceRepository()
@@ -384,8 +384,8 @@ class Unavailable:
 
 def test_ready_health_checks_db_storage_and_queue_without_exposing_failures() -> None:
   from fastapi.testclient import TestClient
-  from proctoring_api.app import create_app
-  from proctoring_api.services.readiness import ReadinessService
+  from proctoring.app import create_app
+  from proctoring.services.readiness import ReadinessService
 
   client = TestClient(create_app(Available(), readiness_service=ReadinessService(Available(), Available(), Available())))
   response = client.get("/health/ready")
@@ -399,7 +399,7 @@ def test_ready_health_checks_db_storage_and_queue_without_exposing_failures() ->
 
 
 def test_infrastructure_command_has_a_sanitized_nonzero_failure_exit(monkeypatch, capsys) -> None:
-  from proctoring_api import cli
+  from proctoring import cli
 
   async def unavailable() -> bool:
     raise RuntimeError("S3 secret-key must not be printed")

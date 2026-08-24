@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from proctoring_api.db.migrations import MigrationLockError, MigrationRunner, migration_files, split_sql_statements
+from proctoring.db.migrations import MigrationLockError, MigrationRunner, migration_files, split_sql_statements
 
 
 def test_migration_files_preserve_all_existing_numbered_migrations() -> None:

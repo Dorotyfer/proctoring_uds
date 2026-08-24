@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from proctoring_api.pilot import LoadResponse, create_pilot_fixtures, run_load_scenario
+from proctoring.pilot import LoadResponse, create_pilot_fixtures, run_load_scenario
 
 
 def test_fixture_payload_defaults_to_block_and_contains_no_real_personal_data() -> None:

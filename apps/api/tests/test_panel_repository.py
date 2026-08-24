@@ -23,7 +23,7 @@ class Engine:
 
 
 def test_panel_course_queries_parameterize_filters_and_constrain_authorized_courses() -> None:
-  from proctoring_api.repositories.panel import SqlPanelRepository
+  from proctoring.repositories.panel import SqlPanelRepository
   connection = Connection([Result([{"total": 1}]), Result([{"moodle_course_id": "course-a", "name": "Law", "attempt_count": 1, "open_alert_count": 0}])])
   repository = SqlPanelRepository(Engine(connection))
 
@@ -37,7 +37,7 @@ def test_panel_course_queries_parameterize_filters_and_constrain_authorized_cour
 
 
 def test_empty_panel_scope_fails_closed_without_running_a_database_query() -> None:
-  from proctoring_api.repositories.panel import SqlPanelRepository
+  from proctoring.repositories.panel import SqlPanelRepository
   connection = Connection([])
 
   result = asyncio.run(SqlPanelRepository(Engine(connection)).list_sessions({"courseIds": [], "institutional": False}))

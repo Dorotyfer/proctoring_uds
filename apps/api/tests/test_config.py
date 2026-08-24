@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from proctoring_api.config import Settings
+from proctoring.config import Settings
 
 
 def valid_environment() -> dict[str, str]:

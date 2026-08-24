@@ -17,9 +17,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
-from proctoring_api.app import create_app
-from proctoring_api.auth import issue_browser_token
-from proctoring_api.models import DeviceMode, SessionStatus
+from proctoring.app import create_app
+from proctoring.auth import issue_browser_token
+from proctoring.models import DeviceMode, SessionStatus
 
 
 SECRET = "selenium-browser-secret-with-at-least-32-characters"

@@ -5,7 +5,7 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from proctoring_api.services.analysis import (
+from proctoring.services.analysis import (
   AnalysisCapacityError,
   AnalysisQueueService,
   ChallengeExpiredError,

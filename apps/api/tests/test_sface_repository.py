@@ -1,7 +1,7 @@
 import asyncio
 
-from proctoring_api.repositories.sface import SqlSFaceProfileRepository
-from proctoring_api.services.vision import DescriptorCipher
+from proctoring.repositories.sface import SqlSFaceProfileRepository
+from proctoring.services.vision import DescriptorCipher
 
 
 class Result:

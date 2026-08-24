@@ -1,8 +1,8 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from proctoring_api.repositories.analysis import SqlAnalysisRepository
-from proctoring_api.repositories.monitoring import SqlMonitoringRepository
+from proctoring.repositories.analysis import SqlAnalysisRepository
+from proctoring.repositories.monitoring import SqlMonitoringRepository
 
 
 class Result:

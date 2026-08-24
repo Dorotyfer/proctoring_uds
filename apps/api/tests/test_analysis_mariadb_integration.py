@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import pytest
 
-from proctoring_api.db.engine import create_mariadb_engine
-from proctoring_api.repositories.analysis import SqlAnalysisRepository
+from proctoring.db.engine import create_mariadb_engine
+from proctoring.repositories.analysis import SqlAnalysisRepository
 
 
 @pytest.mark.integration

@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from proctoring_api.services.vision import (
+from proctoring.services.vision import (
   DeepFaceAdapter,
   DescriptorCipher,
   FaceAnalysisError,

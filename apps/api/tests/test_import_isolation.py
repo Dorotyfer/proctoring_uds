@@ -10,9 +10,9 @@ def test_api_and_worker_package_imports_do_not_import_model_runtimes() -> None:
   environment["PYTHONPATH"] = str(api_root / "src")
   script = """
 import sys
-import proctoring_api.main
-import proctoring_api.worker_main
-import proctoring_api.model_runtime
+import proctoring.main
+import proctoring.worker_main
+import proctoring.model_runtime
 for forbidden in ('deepface', 'tensorflow', 'torch', 'torchvision', 'cv2'):
   assert forbidden not in sys.modules, forbidden
 """

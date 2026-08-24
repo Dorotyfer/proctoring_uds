@@ -2,8 +2,8 @@ import asyncio
 from datetime import UTC, datetime
 from hashlib import sha256
 
-from proctoring_api.services.evidence_crypto import EvidenceEncryptionService
-from proctoring_api.services.worker import AnalysisUnavailable, AnalysisWorker, StagingFrameLoader
+from proctoring.services.evidence_crypto import EvidenceEncryptionService
+from proctoring.services.worker import AnalysisUnavailable, AnalysisWorker, StagingFrameLoader
 
 
 class Storage:

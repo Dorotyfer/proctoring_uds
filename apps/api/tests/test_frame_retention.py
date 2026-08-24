@@ -1,7 +1,7 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from proctoring_api.services.retention import FrameRetentionService
+from proctoring.services.retention import FrameRetentionService
 
 
 class Repository:

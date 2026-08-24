@@ -5,8 +5,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from proctoring_api.app import create_app
-from proctoring_api.auth import issue_browser_token
+from proctoring.app import create_app
+from proctoring.auth import issue_browser_token
 
 
 SECRET = "browser-token-secret-with-at-least-32-characters"

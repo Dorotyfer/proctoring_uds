@@ -3,11 +3,11 @@ from uuid import UUID
 
 import pytest
 
-from proctoring_api.db.rows import parse_json, to_iso_datetime, to_mariadb_datetime
-from proctoring_api.models import CreateSessionInput, FailurePolicy, SessionEventInput
-from proctoring_api.repositories.events import EventRateLimitError, SqlEventRepository
-from proctoring_api.repositories.evidence import SqlEvidenceRepository
-from proctoring_api.repositories.sessions import SqlSessionRepository
+from proctoring.db.rows import parse_json, to_iso_datetime, to_mariadb_datetime
+from proctoring.models import CreateSessionInput, FailurePolicy, SessionEventInput
+from proctoring.repositories.events import EventRateLimitError, SqlEventRepository
+from proctoring.repositories.evidence import SqlEvidenceRepository
+from proctoring.repositories.sessions import SqlSessionRepository
 
 
 def test_row_helpers_normalize_mariadb_wire_values() -> None:
@@ -105,7 +105,7 @@ def test_event_repository_enforces_the_120_per_minute_limit_inside_the_locked_tr
 
 def test_event_repository_revalidates_locked_session_state_before_idempotency() -> None:
   connection = Connection([Result()])
-  from proctoring_api.services.events import SessionUnavailableError
+  from proctoring.services.events import SessionUnavailableError
 
   with pytest.raises(SessionUnavailableError):
     asyncio.run(SqlEventRepository(Engine(connection)).create(UUID("e3d9cce1-a5b8-4bfe-88e1-68a57475266d"), event_input()))

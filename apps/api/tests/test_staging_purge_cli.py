@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from proctoring_api import cli
+from proctoring import cli
 
 
 class FakeAnalysisRepository:

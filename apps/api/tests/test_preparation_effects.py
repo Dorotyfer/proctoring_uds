@@ -1,6 +1,6 @@
 import asyncio
 
-from proctoring_api.services.effects import PreparationEffects
+from proctoring.services.effects import PreparationEffects
 
 
 class Repository:

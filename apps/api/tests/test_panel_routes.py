@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 import jwt
 
-from proctoring_api.app import create_app
+from proctoring.app import create_app
 
 
 PANEL_SECRET = "panel-sso-secret-with-at-least-32-characters"
@@ -49,7 +49,7 @@ class EvidenceService:
     return "scoped-token"
   async def read_content(self, evidence_id, access_token, **kwargs):
     self.calls.append(("read", evidence_id, access_token, kwargs))
-    from proctoring_api.services.evidence import EvidenceContent
+    from proctoring.services.evidence import EvidenceContent
     return EvidenceContent(b"image", {"Cache-Control": "private, no-store", "Content-Type": "image/jpeg", "X-Content-Type-Options": "nosniff", "Content-Disposition": 'inline; filename="evidence.jpg"'})
 
 
@@ -185,7 +185,7 @@ def test_evidence_access_and_content_are_scoped_and_content_is_safe() -> None:
 
 
 def test_evidence_content_returns_not_found_for_a_valid_token_with_deleted_or_non_alert_evidence() -> None:
-  from proctoring_api.services.evidence import EvidenceNotFoundError
+  from proctoring.services.evidence import EvidenceNotFoundError
 
   class MissingEvidence:
     async def issue_content_token(self, *args, **kwargs): return "scoped-token"

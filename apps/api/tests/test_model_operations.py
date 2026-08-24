@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 import sys
 
-from proctoring_api.benchmark import BenchmarkSample, build_benchmark_report
-from proctoring_api.model_runtime import LocalModelBundle
-from proctoring_api.models_cli import main
+from proctoring.benchmark import BenchmarkSample, build_benchmark_report
+from proctoring.model_runtime import LocalModelBundle
+from proctoring.models_cli import main
 
 
 def manifest(path: Path, source: Path, destination: Path, digest: str) -> Path:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from proctoring_api.manifest import ManifestValidationError, main, validate_inventory
+from proctoring.manifest import ManifestValidationError, main, validate_inventory
 
 
 def artifact(name: str, sha256: str | None) -> dict[str, str | None]:

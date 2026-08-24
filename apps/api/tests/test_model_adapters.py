@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-from proctoring_api.model_runtime import build_deepface_adapter, build_ssdlite_adapter
+from proctoring.model_runtime import build_deepface_adapter, build_ssdlite_adapter
 
 
 class Numpy:

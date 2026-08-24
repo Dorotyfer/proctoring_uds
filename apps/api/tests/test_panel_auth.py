@@ -24,7 +24,7 @@ def token(payload: dict) -> str:
 
 
 def test_moodle_sso_requires_hs256_audience_timestamps_and_exact_claims() -> None:
-  from proctoring_api.panel_auth import decode_moodle_sso
+  from proctoring.panel_auth import decode_moodle_sso
 
   decoded = decode_moodle_sso(token(claims()), SECRET)
 
@@ -41,14 +41,14 @@ def test_moodle_sso_requires_hs256_audience_timestamps_and_exact_claims() -> Non
   claims(aud="another-audience")
 ])
 def test_moodle_sso_rejects_expired_or_missing_required_claims(payload: dict) -> None:
-  from proctoring_api.panel_auth import PanelAuthenticationError, decode_moodle_sso
+  from proctoring.panel_auth import PanelAuthenticationError, decode_moodle_sso
 
   with pytest.raises(PanelAuthenticationError, match="Invalid Moodle panel token"):
     decode_moodle_sso(token(payload), SECRET)
 
 
 def test_moodle_sso_rejects_a_forged_signature_and_none_algorithm() -> None:
-  from proctoring_api.panel_auth import PanelAuthenticationError, decode_moodle_sso
+  from proctoring.panel_auth import PanelAuthenticationError, decode_moodle_sso
 
   valid = token(claims())
   forged = f"{valid}tampered"
@@ -60,7 +60,7 @@ def test_moodle_sso_rejects_a_forged_signature_and_none_algorithm() -> None:
 
 
 def test_panel_session_has_a_random_csrf_claim_and_never_exposes_its_jwt() -> None:
-  from proctoring_api.panel_auth import decode_moodle_sso, decode_panel_session, issue_panel_session
+  from proctoring.panel_auth import decode_moodle_sso, decode_panel_session, issue_panel_session
 
   first = issue_panel_session(decode_moodle_sso(token(claims()), SECRET), "api-session-secret-with-at-least-32-characters")
   second = issue_panel_session(decode_moodle_sso(token(claims()), SECRET), "api-session-secret-with-at-least-32-characters")

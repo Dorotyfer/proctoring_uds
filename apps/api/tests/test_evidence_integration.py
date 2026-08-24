@@ -5,9 +5,9 @@ import os
 
 import pytest
 
-from proctoring_api.db.engine import create_mariadb_engine
-from proctoring_api.repositories.sessions import SqlSessionRepository
-from proctoring_api.services.object_storage import S3ObjectStorage
+from proctoring.db.engine import create_mariadb_engine
+from proctoring.repositories.sessions import SqlSessionRepository
+from proctoring.services.object_storage import S3ObjectStorage
 
 
 REQUIRED_INTEGRATION_SETTINGS = (

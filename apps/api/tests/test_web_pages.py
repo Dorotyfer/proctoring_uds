@@ -9,7 +9,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from proctoring_api.app import create_app
+from proctoring.app import create_app
 
 
 class Available:
