@@ -6,6 +6,7 @@
   --border: #d8dde6;
   --muted: #5d6675;
   --surface: #ffffff;
+  --surface-muted: #f8fafc;
   --background: #f5f7fa;
   --text: #172033;
 }
@@ -159,6 +160,10 @@ p {
   gap: 20px;
 }
 
+.panel-app > * {
+  min-width: 0;
+}
+
 .panel-userbar,
 .section-heading,
 .attempt-row,
@@ -176,6 +181,10 @@ p {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+}
+
+.panel-userbar {
+  border-top: 3px solid var(--accent);
 }
 
 .panel-userbar div,
@@ -204,6 +213,10 @@ p {
   align-items: end;
   gap: 12px;
   margin: 20px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface-muted);
 }
 
 .attempt-filters {
@@ -231,6 +244,21 @@ p {
   font: inherit;
 }
 
+.panel-toolbar input:focus,
+.attempt-filters input:focus,
+.attempt-filters select:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(20, 87, 217, 0.2);
+  outline-offset: 2px;
+}
+
+.panel-toolbar input:focus,
+.attempt-filters input:focus,
+.attempt-filters select:focus {
+  border-color: var(--accent);
+}
+
 .course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -249,11 +277,27 @@ p {
   text-align: left;
 }
 
+.course-card {
+  min-height: 112px;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.course-card:hover,
+.course-card:focus-visible,
+.attempt-row:hover {
+  background: var(--surface-muted);
+}
+
+.course-card > span:last-child {
+  justify-self: end;
+}
+
 .attempt-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 16px;
+  transition: border-color 160ms ease, background-color 160ms ease;
 }
 
 .attempt-open {
@@ -271,7 +315,6 @@ p {
   white-space: nowrap;
 }
 
-.course-card:hover,
 .attempt-row:hover,
 .attempt-open:focus-visible {
   border-color: var(--accent);
@@ -293,12 +336,17 @@ p {
 }
 
 .panel-state {
-  padding: 28px 0;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 32px 20px;
+  background: var(--surface-muted);
   color: var(--muted);
   text-align: center;
 }
 
 .profile-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
   overflow-x: auto;
 }
 
@@ -315,10 +363,17 @@ p {
   text-align: left;
 }
 
+.profile-table tbody tr:hover {
+  background: var(--surface-muted);
+}
+
 .profile-table th {
+  background: var(--surface-muted);
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .back-button {
@@ -332,6 +387,8 @@ p {
 
 .pagination {
   margin-top: 20px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .pagination button {
@@ -340,6 +397,17 @@ p {
   padding: 8px 12px;
   background: transparent;
   color: var(--text);
+  cursor: pointer;
+}
+
+.pagination button:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .detail-summary {
@@ -550,6 +618,10 @@ p {
   white-space: nowrap;
 }
 
+.badge:not(.warning) {
+  background: var(--surface-muted);
+}
+
 .badge.warning {
   border-color: #f0b8aa;
   color: #b42318;
@@ -582,6 +654,10 @@ p {
   text-decoration: underline;
 }
 
+.text-button:hover {
+  color: #0d3fa8;
+}
+
 .evidence-link {
   display: block;
   margin-bottom: 8px;
@@ -594,10 +670,32 @@ p {
 
   .panel-userbar,
   .section-heading,
-  .attempt-row,
   .course-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .attempt-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .attempt-row > span:nth-child(2) {
+    justify-items: start;
+  }
+
+  .report-button {
+    justify-self: start;
+  }
+
+  .risk-overview {
+    align-items: flex-start;
+  }
+
+  .risk-signal > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 
   .panel-toolbar,
@@ -606,7 +704,13 @@ p {
     grid-template-columns: 1fr;
   }
 
-  .attempt-row > span:last-child {
-    justify-items: start;
+  .panel-shell {
+    width: min(100% - 24px, 1180px);
+    padding: 24px 0;
+  }
+
+  .panel-userbar,
+  .panel-content {
+    padding: 18px;
   }
 }
