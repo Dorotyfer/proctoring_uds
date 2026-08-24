@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+import ipaddress
+import re
 from typing import Any, Callable, Mapping, Protocol
 from uuid import uuid4
 
@@ -67,7 +69,7 @@ class EvidenceService:
   ) -> dict[str, Any]:
     if kind not in {"identity", "interval", "alert"} or not capture:
       raise ValueError("Invalid evidence capture")
-    object_id = event_id or str(uuid4())
+    object_id = str(uuid4())
     object_key = _evidence_object_key(session_id, kind, object_id)
     encrypted = self._encryption_service.encrypt(capture)
     await self._object_storage.put(object_key, encrypted.ciphertext, "application/octet-stream")
@@ -78,13 +80,16 @@ class EvidenceService:
       "expiresAt": self._now() + timedelta(days=self._retention_days)
     }
     try:
-      return await self._repository.create(input_data)
+      evidence = await self._repository.create(input_data)
     except Exception:
       try:
         await self._object_storage.delete(object_key)
       except Exception:
         pass
       raise
+    if evidence["objectKey"] != object_key:
+      await self._object_storage.delete(object_key)
+    return evidence
 
   async def read_authorized(self, evidence: Mapping[str, Any]) -> bytes:
     try:
@@ -108,9 +113,10 @@ class EvidenceService:
     evidence = await self._repository.find_by_id(evidence_id)
     if not _may_view(evidence, can_view_evidence, course_ids, institutional):
       raise EvidenceAccessError("Evidence access unavailable")
+    context = _audit_context(ip_address, user_agent)
     await self._repository.audit({
       "evidenceId": evidence_id, "actorId": actor_id, "action": "view",
-      "ipAddress": ip_address, "userAgent": user_agent
+      **context
     })
     now = self._now()
     return jwt.encode({
@@ -118,7 +124,9 @@ class EvidenceService:
       "iat": now, "exp": now + timedelta(seconds=60)
     }, self._content_token_secret, algorithm="HS256")
 
-  async def read_content(self, evidence_id: str, access_token: str) -> EvidenceContent:
+  async def read_content(
+    self, evidence_id: str, access_token: str, *, ip_address: str | None = None, user_agent: str | None = None
+  ) -> EvidenceContent:
     try:
       claims = jwt.decode(access_token, self._content_token_secret, algorithms=["HS256"], audience=CONTENT_AUDIENCE,
         options={"require": ["exp", "iat", "aud", "evidenceId", "moodleUserId"]})
@@ -128,9 +136,10 @@ class EvidenceService:
       if not evidence or evidence.get("kind") != "alert":
         raise EvidenceAccessError("Evidence content unavailable")
       body = await self.read_authorized(evidence)
+      context = _audit_context(ip_address, user_agent)
       await self._repository.audit({
         "evidenceId": evidence_id, "actorId": claims["moodleUserId"], "action": "download",
-        "ipAddress": None, "userAgent": None
+        **context
       })
       return EvidenceContent(body, {
         "Cache-Control": "private, no-store", "Content-Disposition": 'inline; filename="evidence.jpg"',
@@ -168,3 +177,19 @@ def _may_view(
   return bool(evidence and evidence.get("kind") == "alert" and can_view_evidence and (
     institutional or str(evidence.get("courseId")) in course_ids
   ))
+
+
+def _audit_context(ip_address: str | None, user_agent: str | None) -> dict[str, str | None]:
+  clean_ip = None
+  if isinstance(ip_address, str):
+    candidate = ip_address.strip()
+    try:
+      clean_ip = str(ipaddress.ip_address(candidate))
+    except ValueError:
+      pass
+  clean_user_agent = None
+  if isinstance(user_agent, str):
+    candidate = re.sub(r"[\x00-\x1f\x7f]", "", user_agent).strip()
+    if candidate:
+      clean_user_agent = candidate[:512]
+  return {"ipAddress": clean_ip, "userAgent": clean_user_agent}

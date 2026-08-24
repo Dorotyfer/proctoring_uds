@@ -7,7 +7,13 @@ from typing import Any, Callable
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+  ClientError,
+  ConnectTimeoutError,
+  ConnectionClosedError,
+  EndpointConnectionError,
+  ReadTimeoutError
+)
 
 
 class ObjectStorageError(RuntimeError):
@@ -87,6 +93,11 @@ class S3ObjectStorage:
     _validate_key(key)
     await self._run("delete_object", {"Bucket": self._bucket, "Key": key})
 
+  async def close(self) -> None:
+    close = getattr(self._client, "close", None)
+    if callable(close):
+      await asyncio.to_thread(close)
+
   async def _run(self, method_name: str, request: dict[str, Any]) -> Any:
     method = getattr(self._client, method_name)
     for attempt in range(3):
@@ -110,11 +121,11 @@ def _validate_key(key: str) -> None:
 
 
 def _is_retryable(error: Exception) -> bool:
-  if getattr(error, "retryable", False) or getattr(error, "$retryable", False):
-    return True
   status_code = getattr(error, "status_code", None)
   if status_code is None and isinstance(error, ClientError):
     status_code = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
   if isinstance(status_code, int):
     return status_code in {408, 429} or status_code >= 500
-  return isinstance(error, BotoCoreError)
+  return isinstance(error, (
+    ConnectTimeoutError, ConnectionClosedError, EndpointConnectionError, ReadTimeoutError
+  ))

@@ -23,15 +23,40 @@ class Engine:
     self.disposed = True
 
 
+class Storage:
+  def __init__(self) -> None:
+    self.closed = False
+
+  async def check(self) -> None:
+    raise RuntimeError("not connected in construction test")
+
+  async def close(self) -> None:
+    self.closed = True
+
+
 def test_runtime_factory_composes_services_without_connecting_until_health_and_disposes_engine() -> None:
   engine = Engine()
-  app = create_runtime_app(Settings.from_environment(environment()), engine_factory=lambda _: engine)
+  storage = Storage()
+  app = create_runtime_app(
+    Settings.from_environment(environment()), engine_factory=lambda _: engine, storage_factory=lambda _: storage
+  )
 
   with TestClient(app) as client:
     response = client.get("/health")
 
   assert response.status_code == 503
   assert engine.disposed is True
+  assert storage.closed is True
+
+
+def test_runtime_factory_exposes_evidence_service_without_connecting_to_storage() -> None:
+  engine = Engine()
+  app = create_runtime_app(Settings.from_environment(environment()), engine_factory=lambda _: engine)
+
+  assert app.state.evidence_service is not None
+  assert app.state.evidence_repository is not None
+  assert app.state.object_storage is not None
+  assert engine.disposed is False
 
 
 def test_mariadb_engine_configures_utc_for_each_new_connection(monkeypatch) -> None:

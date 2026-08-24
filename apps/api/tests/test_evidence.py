@@ -4,6 +4,9 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from botocore.exceptions import (
+  ClientError, EndpointConnectionError, NoCredentialsError, ParamValidationError, PartialCredentialsError
+)
 
 from proctoring_api.services.evidence_crypto import EvidenceCryptoError, EvidenceEncryptionService
 
@@ -60,10 +63,6 @@ def test_rejects_corrupted_aes_gcm_data_without_crypto_details(field: str) -> No
   assert "gcm" not in str(error.value).lower()
 
 
-class RetryableFailure(Exception):
-  retryable = True
-
-
 class AuthorizationFailure(Exception):
   status_code = 403
 
@@ -84,7 +83,8 @@ class StrictS3Client:
 def test_s3_retries_only_retryable_failures_and_keeps_encrypted_content_type() -> None:
   from proctoring_api.services.object_storage import S3ObjectStorage
 
-  client = StrictS3Client([RetryableFailure(), RetryableFailure(), {}])
+  failure = EndpointConnectionError(endpoint_url="https://s3.example.edu")
+  client = StrictS3Client([failure, failure, {}])
   storage = S3ObjectStorage("evidence", client=client, retry_delay=lambda _: None)
 
   asyncio.run(storage.put("session-1/alert/item.enc", b"ciphertext", "application/octet-stream"))
@@ -94,6 +94,18 @@ def test_s3_retries_only_retryable_failures_and_keeps_encrypted_content_type() -
     "Bucket": "evidence", "Key": "session-1/alert/item.enc", "Body": b"ciphertext",
     "ContentType": "application/octet-stream"
   }
+
+
+def test_s3_retries_client_503_exactly_three_times() -> None:
+  from proctoring_api.services.object_storage import S3ObjectStorage
+
+  failure = ClientError({"Error": {"Code": "ServiceUnavailable"}, "ResponseMetadata": {"HTTPStatusCode": 503}}, "PutObject")
+  client = StrictS3Client([failure, failure, {}])
+  storage = S3ObjectStorage("evidence", client=client, retry_delay=lambda _: None)
+
+  asyncio.run(storage.put("session-1/alert/item.enc", b"ciphertext", "application/octet-stream"))
+
+  assert len(client.calls) == 3
 
 
 def test_s3_does_not_retry_authorization_or_invalid_keys() -> None:
@@ -107,6 +119,21 @@ def test_s3_does_not_retry_authorization_or_invalid_keys() -> None:
   assert len(client.calls) == 1
   with pytest.raises(StorageValidationError, match="^Invalid evidence object key$"):
     asyncio.run(storage.put("../escape.enc", b"ciphertext", "application/octet-stream"))
+  assert len(client.calls) == 1
+
+
+@pytest.mark.parametrize("failure", [
+  NoCredentialsError(), PartialCredentialsError(provider="test", cred_var="secret"),
+  ParamValidationError(report="invalid request")
+])
+def test_s3_does_not_retry_credential_or_sdk_validation_failures(failure: Exception) -> None:
+  from proctoring_api.services.object_storage import ObjectStorageError, S3ObjectStorage
+
+  client = StrictS3Client([failure])
+  storage = S3ObjectStorage("evidence", client=client, retry_delay=lambda _: None)
+
+  with pytest.raises(ObjectStorageError, match="^Evidence storage unavailable$"):
+    asyncio.run(storage.put("session-1/alert/item.enc", b"ciphertext", "application/octet-stream"))
   assert len(client.calls) == 1
 
 
@@ -134,6 +161,21 @@ class StrictStorage:
     self.objects.pop(key, None)
 
 
+class ConcurrentStorage(StrictStorage):
+  def __init__(self) -> None:
+    super().__init__()
+    self._puts = 0
+    self._both_uploaded = asyncio.Event()
+
+  async def put(self, key: str, body: bytes, content_type: str) -> None:
+    await super().put(key, body, content_type)
+    self._puts += 1
+    if self._puts == 2:
+      self._both_uploaded.set()
+      return
+    await self._both_uploaded.wait()
+
+
 class StrictEvidenceRepository:
   def __init__(self, *, create_error: Exception | None = None) -> None:
     self.create_error = create_error
@@ -142,13 +184,19 @@ class StrictEvidenceRepository:
     self.deleted: list[str] = []
     self.expired: list[dict] = []
     self.evidence: dict[str, dict] = {}
+    self.event_evidence: dict[str, str] = {}
 
   async def create(self, input_data: dict) -> dict:
     self.created.append(input_data)
     if self.create_error:
       raise self.create_error
+    event_id = input_data["eventId"]
+    if event_id and event_id in self.event_evidence:
+      return self.evidence[self.event_evidence[event_id]]
     record = {"id": "evidence-1", "courseId": "course-1", **input_data}
     self.evidence[record["id"]] = record
+    if event_id:
+      self.event_evidence[event_id] = record["id"]
     return record
 
   async def find_by_id(self, evidence_id: str) -> dict | None:
@@ -179,8 +227,9 @@ def test_evidence_uploads_encrypted_bytes_before_metadata() -> None:
 
   evidence = asyncio.run(service.store_capture("session-1", "alert", b"jpeg-plaintext", event_id="event-1"))
 
-  assert storage.actions == [("put", "session-1/alert/event-1.enc")]
-  assert repository.created[0]["objectKey"] == "session-1/alert/event-1.enc"
+  assert storage.actions[0][0] == "put"
+  assert repository.created[0]["objectKey"].startswith("session-1/alert/")
+  assert repository.created[0]["objectKey"].endswith(".enc")
   assert repository.created[0]["contentType"] == "image/jpeg"
   assert repository.created[0]["encryptionIv"] and repository.created[0]["encryptionTag"]
   assert b"jpeg-plaintext" not in storage.objects.values()
@@ -208,6 +257,42 @@ def test_evidence_compensates_with_delete_when_metadata_transaction_fails() -> N
   assert storage.objects == {}
 
 
+def test_repeated_event_capture_keeps_the_first_metadata_and_deletes_the_losing_upload() -> None:
+  storage = StrictStorage()
+  repository = StrictEvidenceRepository()
+  service = evidence_service(storage, repository)
+  first = asyncio.run(service.store_capture("session-1", "alert", b"first-jpeg", event_id="event-1"))
+  first_ciphertext = storage.objects[first["objectKey"]]
+
+  second = asyncio.run(service.store_capture("session-1", "alert", b"second-jpeg", event_id="event-1"))
+
+  assert repository.created[0]["objectKey"] != repository.created[1]["objectKey"]
+  assert first["objectKey"] == second["objectKey"]
+  assert second["id"] == first["id"]
+  assert storage.objects == {first["objectKey"]: first_ciphertext}
+  assert asyncio.run(service.read_authorized(first)) == b"first-jpeg"
+  assert asyncio.run(service.read_authorized(second)) == b"first-jpeg"
+
+
+def test_concurrent_event_capture_deletes_only_its_losing_upload_after_upsert() -> None:
+  storage = ConcurrentStorage()
+  repository = StrictEvidenceRepository()
+  service = evidence_service(storage, repository)
+
+  async def store_twice():
+    return await asyncio.gather(
+      service.store_capture("session-1", "alert", b"first-jpeg", event_id="event-1"),
+      service.store_capture("session-1", "alert", b"second-jpeg", event_id="event-1")
+    )
+  first, second = asyncio.run(store_twice())
+
+  canonical = first if first["objectKey"] in storage.objects else second
+  assert first["id"] == second["id"] == "evidence-1"
+  assert list(storage.objects) == [canonical["objectKey"]]
+  assert asyncio.run(service.read_authorized(canonical)) in {b"first-jpeg", b"second-jpeg"}
+  assert asyncio.run(service.read_authorized(first)) == asyncio.run(service.read_authorized(second))
+
+
 def test_evidence_access_requires_alert_course_scope_and_audits_view_and_download() -> None:
   storage = StrictStorage()
   repository = StrictEvidenceRepository()
@@ -218,7 +303,9 @@ def test_evidence_access_requires_alert_course_scope_and_audits_view_and_downloa
     evidence["id"], actor_id="reviewer-1", can_view_evidence=True,
     course_ids={"course-1"}, institutional=False, ip_address="203.0.113.4", user_agent="reviewer"
   ))
-  content = asyncio.run(service.read_content(evidence["id"], token))
+  content = asyncio.run(service.read_content(
+    evidence["id"], token, ip_address=" 203.0.113.4 ", user_agent=(" reviewer-agent\r\n" + "x" * 600)
+  ))
 
   assert content.body == b"jpeg"
   assert content.headers == {
@@ -226,6 +313,10 @@ def test_evidence_access_requires_alert_course_scope_and_audits_view_and_downloa
     "Content-Type": "image/jpeg", "X-Content-Type-Options": "nosniff"
   }
   assert [item["action"] for item in repository.audits] == ["view", "download"]
+  assert repository.audits[1]["ipAddress"] == "203.0.113.4"
+  assert repository.audits[1]["userAgent"].startswith("reviewer-agent")
+  assert len(repository.audits[1]["userAgent"]) == 512
+  assert "\r" not in repository.audits[1]["userAgent"]
 
 
 def test_evidence_content_fails_closed_for_invalid_token_and_unauthorized_scope() -> None:

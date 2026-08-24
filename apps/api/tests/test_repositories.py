@@ -6,6 +6,7 @@ import pytest
 from proctoring_api.db.rows import parse_json, to_iso_datetime, to_mariadb_datetime
 from proctoring_api.models import CreateSessionInput, FailurePolicy, SessionEventInput
 from proctoring_api.repositories.events import EventRateLimitError, SqlEventRepository
+from proctoring_api.repositories.evidence import SqlEvidenceRepository
 from proctoring_api.repositories.sessions import SqlSessionRepository
 
 
@@ -109,3 +110,34 @@ def test_event_repository_revalidates_locked_session_state_before_idempotency() 
   with pytest.raises(SessionUnavailableError):
     asyncio.run(SqlEventRepository(Engine(connection)).create(UUID("e3d9cce1-a5b8-4bfe-88e1-68a57475266d"), event_input()))
   assert "expires_at > UTC_TIMESTAMP(3)" in connection.statements[0][0]
+
+
+class EvidenceEngine:
+  def __init__(self, connection): self.connection = connection
+  def begin(self): return self.connection.begin()
+
+
+def evidence_row() -> dict:
+  return {
+    "id": "62d23d73-0d40-4d73-b97d-4443718b602e", "session_id": "e3d9cce1-a5b8-4bfe-88e1-68a57475266d",
+    "event_id": "3a60ebc0-c0be-4a2d-a2ce-a49cd9e2f20f", "moodle_course_id": "course-1", "kind": "alert",
+    "object_key": "session-1/alert/canonical.enc", "content_type": "image/jpeg", "byte_size": 4,
+    "sha256": "a" * 64, "encryption_iv": b"i" * 12, "encryption_tag": b"t" * 16,
+    "created_at": "2026-08-24 12:00:00.000", "expires_at": "2026-09-23 12:00:00.000", "deleted_at": None
+  }
+
+
+def test_evidence_repository_upsert_rereads_the_canonical_event_record() -> None:
+  connection = Connection([Result(), Result([evidence_row()])])
+  repository = SqlEvidenceRepository(EvidenceEngine(connection))
+
+  evidence = asyncio.run(repository.create({
+    "sessionId": "e3d9cce1-a5b8-4bfe-88e1-68a57475266d", "eventId": "3a60ebc0-c0be-4a2d-a2ce-a49cd9e2f20f",
+    "kind": "alert", "objectKey": "session-1/alert/new-upload.enc", "contentType": "image/jpeg",
+    "byteSize": 4, "sha256": "a" * 64, "encryptionIv": b"i" * 12, "encryptionTag": b"t" * 16,
+    "expiresAt": "2026-09-23T12:00:00.000Z"
+  }))
+
+  assert "ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)" in connection.statements[0][0]
+  assert "WHERE event_id = :value" in connection.statements[1][0]
+  assert evidence["objectKey"] == "session-1/alert/canonical.enc"

@@ -34,6 +34,9 @@ def create_app(
   health_service: HealthService,
   *,
   readiness_service: HealthService | None = None,
+  evidence_service: object | None = None,
+  evidence_repository: object | None = None,
+  object_storage: object | None = None,
   session_service: SessionService | None = None,
   event_service: EventService | None = None,
   jwt_secret: str | None = None,
@@ -45,6 +48,11 @@ def create_app(
   app = FastAPI()
   app.state.health_service = health_service
   app.state.readiness_service = readiness_service
+  # Task 4 consumes these for panel evidence routes; Task 5 consumes them for
+  # server-generated monitoring captures. This task intentionally adds no HTTP route.
+  app.state.evidence_service = evidence_service
+  app.state.evidence_repository = evidence_repository
+  app.state.object_storage = object_storage
   if web_origin:
     app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=True,
       allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
