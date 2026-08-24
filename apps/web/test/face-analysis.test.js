@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BIOMETRIC_DESCRIPTOR_LENGTH,
   createLivenessChallenge,
+  describeAttentionSignal,
   describeFaceState,
   evaluateChallengeStep,
   extractFaceEmbedding
@@ -32,5 +33,13 @@ describe('face analysis', () => {
     expect(extractFaceEmbedding({ embedding })).toEqual(embedding);
     expect(extractFaceEmbedding({ embedding: embedding.slice(1) })).toBeNull();
     expect(extractFaceEmbedding({ embedding: embedding.map(() => Number.NaN) })).toBeNull();
+  });
+
+  it('summarizes the dominant facial expression without retaining face data', () => {
+    expect(describeAttentionSignal({ face: [{ expressions: [
+      { name: 'neutral', score: 0.91 },
+      { name: 'happy', score: 0.04 }
+    ] }] })).toEqual({ signal: 'facial_expression_observation', expression: 'neutral', confidence: 0.91 });
+    expect(describeAttentionSignal({ face: [] })).toBeNull();
   });
 });

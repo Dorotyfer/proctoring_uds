@@ -11,7 +11,8 @@ export const EventType = z.enum([
   'page_visibility_changed',
   'network_disconnected',
   'network_reconnected',
-  'seb_event'
+  'seb_event',
+  'attention_signal'
 ]);
 
 export const SessionEventInput = z.object({

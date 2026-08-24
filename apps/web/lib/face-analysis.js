@@ -39,6 +39,26 @@ export function describeFaceState(result, frame) {
   return { face: faces[0], state: framed ? 'valid' : 'out-of-frame' };
 }
 
+export function describeAttentionSignal(result) {
+  const faces = result?.face ?? [];
+  if (faces.length !== 1 || !Array.isArray(faces[0].expressions)) {
+    return null;
+  }
+
+  const expression = faces[0].expressions
+    .filter((item) => typeof item?.name === 'string' && Number.isFinite(item.score))
+    .sort((left, right) => right.score - left.score)[0];
+  if (!expression) {
+    return null;
+  }
+
+  return {
+    signal: 'facial_expression_observation',
+    expression: expression.name,
+    confidence: Math.round(expression.score * 100) / 100
+  };
+}
+
 export function extractFaceEmbedding(face) {
   const embedding = face?.embedding;
   if (!Array.isArray(embedding) || embedding.length !== BIOMETRIC_DESCRIPTOR_LENGTH) {

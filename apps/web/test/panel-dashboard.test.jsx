@@ -116,7 +116,7 @@ it('shows control level and explainable behavior risk for an attempt', async () 
       session: {
         id: 'session-risk', attemptId: '15', courseId: '7', studentName: 'Ana Pérez', studentDocument: '1234567', quizName: 'Examen', status: 'completed', deviceMode: 'browser', controlLevel: 'high',
         risk: { category: 'high_risk', controlLevel: 'high', score: 80, counts: { multiple_faces: 1 }, reasons: [{ code: 'multiple_faces', count: 1, label: 'Se detectaron múltiples rostros', points: 30 }] },
-        alerts: [], events: [{ id: 'event-1', type: 'multiple_faces', occurred_at: '2026-08-20T20:05:00.000Z' }, { id: 'event-2', type: 'page_visibility_changed', occurred_at: '2026-08-20T20:06:00.000Z' }], evidence: []
+        alerts: [], events: [{ id: 'event-1', type: 'multiple_faces', occurred_at: '2026-08-20T20:05:00.000Z' }, { id: 'event-2', type: 'attention_signal', metadata: { expression: 'neutral', confidence: 0.91 }, occurred_at: '2026-08-20T20:06:00.000Z' }, { id: 'event-3', type: 'page_visibility_changed', occurred_at: '2026-08-20T20:07:00.000Z' }], evidence: []
       }
     })
   ];
@@ -140,6 +140,8 @@ it('shows control level and explainable behavior risk for an attempt', async () 
   expect(screen.getByRole('region', { name: 'Señales detectadas' })).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'Cronología de eventos' })).toBeInTheDocument();
   expect(screen.getByText('Cambio de visibilidad de la página')).toBeInTheDocument();
+  expect(screen.getByText('Observación de expresión facial')).toBeInTheDocument();
+  expect(screen.getByText('Expresión observada: neutral · confianza 91%')).toBeInTheDocument();
 });
 
 it('renders only evidence marked as an incident', async () => {

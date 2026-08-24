@@ -36,7 +36,7 @@ export default function PanelSessionDetail({ canManageBiometrics, session, onBac
       ))}
       <section className="event-timeline" aria-label="Cronología de eventos">
         <h3>Cronología</h3>
-        {session.events.map((event) => <article className="timeline-item" key={event.id}><strong>{alertTypeLabel(event.type)}</strong><p>{new Date(event.occurred_at).toLocaleString()}</p></article>)}
+        {session.events.map((event) => <article className="timeline-item" key={event.id}><strong>{alertTypeLabel(event.type)}</strong>{event.type === 'attention_signal' ? <p>{attentionSignalLabel(event.metadata)}</p> : null}<p>{new Date(event.occurred_at).toLocaleString()}</p></article>)}
       </section>
     </section>
   );
@@ -67,7 +67,14 @@ function alertTypeLabel(type) {
   if (type === 'face_absent') return 'Rostro ausente';
   if (type === 'face_out_of_frame') return 'Rostro fuera de encuadre';
   if (type === 'seb_event') return 'Evento sospechoso de Safe Exam Browser';
+  if (type === 'attention_signal') return 'Observación de expresión facial';
   return type;
+}
+
+function attentionSignalLabel(metadata = {}) {
+  const expression = typeof metadata.expression === 'string' ? metadata.expression : 'no determinada';
+  const confidence = Number.isFinite(metadata.confidence) ? ` · confianza ${Math.round(metadata.confidence * 100)}%` : '';
+  return `Expresión observada: ${expression}${confidence}`;
 }
 
 function BehaviorAnalysis({ risk }) {

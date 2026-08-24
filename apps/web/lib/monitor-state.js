@@ -51,3 +51,19 @@ export function createFaceStateTracker() {
     }
   };
 }
+
+export function createAttentionSignalTracker(cooldownMs = 10000) {
+  let lastExpression = null;
+  let lastEmittedAt = null;
+
+  return {
+    update(signal, now = Date.now()) {
+      if (!signal || now - (lastEmittedAt ?? -Infinity) < cooldownMs && signal.expression === lastExpression) {
+        return null;
+      }
+      lastExpression = signal.expression;
+      lastEmittedAt = now;
+      return 'attention_signal';
+    }
+  };
+}

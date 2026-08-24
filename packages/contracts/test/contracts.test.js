@@ -55,6 +55,12 @@ test('accepts only the event whitelist', () => {
     type: 'biometric_mismatch',
     occurredAt: '2026-08-19T10:10:00.000Z'
   }).type, 'biometric_mismatch');
+  assert.equal(SessionEventInput.parse({
+    clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
+    type: 'attention_signal',
+    occurredAt: '2026-08-19T10:10:00.000Z',
+    metadata: { signal: 'facial_expression_observation', expression: 'neutral', confidence: 0.91 }
+  }).type, 'attention_signal');
   assert.throws(() => SessionEventInput.parse({
     clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
     type: 'unknown',

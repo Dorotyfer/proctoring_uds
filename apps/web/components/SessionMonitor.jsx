@@ -5,11 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 import { captureReference, requestCamera, stopCamera } from '@/lib/camera';
 import { createEventBuffer } from '@/lib/event-buffer';
 import { createIncidentBuffer } from '@/lib/incident-buffer';
-import { describeFaceState } from '@/lib/face-analysis';
+import { describeAttentionSignal, describeFaceState } from '@/lib/face-analysis';
 import { createHumanDetector, detectFrame } from '@/lib/human';
 import { deliverIncident } from '@/lib/incident-delivery';
 import { createIncident } from '@/lib/incident-payload';
-import { createFaceStateTracker, isAlertType } from '@/lib/monitor-state';
+import { createAttentionSignalTracker, createFaceStateTracker, isAlertType } from '@/lib/monitor-state';
 import { getSafeExamBrowserMetadata } from '@/lib/seb-events';
 import { readSessionId, sendEvidence, sendIncident, sendSessionEvent } from '@/lib/session-api';
 
@@ -28,6 +28,7 @@ export function SessionMonitor({ biometricStatus, deviceMode, detector: initialD
     const buffer = createEventBuffer(readSessionId(token), (event) => sendSessionEvent(token, event));
     const incidentBuffer = createIncidentBuffer(readSessionId(token), (incident) => sendIncident(token, incident));
     const tracker = createFaceStateTracker();
+    const attentionTracker = createAttentionSignalTracker();
 
     async function emit(type, metadata = {}) {
       const video = videoRef.current;
@@ -105,6 +106,11 @@ export function SessionMonitor({ biometricStatus, deviceMode, detector: initialD
             }).state;
             const eventType = tracker.update(faceState);
             if (eventType) await emit(eventType, { faceState });
+            if (faceState === 'valid') {
+              const attentionSignal = describeAttentionSignal(result);
+              const attentionEvent = attentionTracker.update(attentionSignal);
+              if (attentionEvent) await emit(attentionEvent, attentionSignal);
+            }
           } catch {
             await emit('camera_interrupted', { source: 'detection-error' });
           }
