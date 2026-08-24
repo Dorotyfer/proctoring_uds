@@ -11,11 +11,14 @@ dependencies = [
   "fastapi==0.115.12",
   "pydantic==2.10.6",
   "pyjwt==2.10.1",
+  "asyncmy==0.2.10",
+  "sqlalchemy==2.0.38",
   "uvicorn==0.34.0"
 ]
 
 [project.scripts]
 proctoring-migrate = "proctoring_api.db.migrations:main"
+proctoring-api = "proctoring_api.main:main"
 
 [project.optional-dependencies]
 test = [
@@ -23,11 +26,9 @@ test = [
   "pytest==8.3.5"
 ]
 runtime = [
-  "asyncmy==0.2.10",
   "boto3==1.37.0",
   "cryptography==44.0.2",
   "jinja2==3.1.5",
-  "sqlalchemy==2.0.38"
 ]
 vision = [
   "deepface==0.0.93",

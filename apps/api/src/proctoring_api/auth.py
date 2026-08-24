@@ -51,7 +51,9 @@ def issue_browser_token(session_id: str, attempt_id: str, device_mode: str, secr
 def decode_browser_token(token: str, secret: str) -> dict[str, Any]:
   """Verify a browser token with its fixed HS256 audience."""
 
-  return jwt.decode(token, secret, algorithms=["HS256"], audience=BROWSER_AUDIENCE)
+  return jwt.decode(token, secret, algorithms=["HS256"], audience=BROWSER_AUDIENCE, options={
+    "require": ["exp", "iat", "aud", "sessionId", "moodleAttemptId", "deviceMode"]
+  })
 
 
 def require_browser_claims(secret: str):

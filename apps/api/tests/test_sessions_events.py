@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from proctoring_api.app import create_app
@@ -104,6 +106,19 @@ def test_internal_session_creation_is_key_protected_idempotent_and_preserves_fai
   assert first["failurePolicy"] == "block"
 
 
+def test_internal_session_round_trips_allow_with_alert_failure_policy_idempotently() -> None:
+  client, _ = create_client()
+  payload = session_payload() | {"failurePolicy": "allow_with_alert"}
+  headers = {"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}
+  first = client.post("/v1/internal/sessions", headers=headers, json=payload)
+  second = client.post("/v1/internal/sessions", headers=headers, json=payload)
+
+  assert first.status_code == 201
+  assert second.status_code == 201
+  assert first.json()["session"]["failurePolicy"] == "allow_with_alert"
+  assert second.json()["session"]["failurePolicy"] == "allow_with_alert"
+
+
 def test_moodle_can_issue_a_15_minute_browser_token_and_read_or_complete_status() -> None:
   client, _ = create_client()
   create_session(client)
@@ -133,7 +148,7 @@ def test_browser_session_and_events_require_a_token_owned_by_the_path_session() 
   event = client.post(f"/v1/sessions/{SESSION_ID}/events", headers=headers, json=event_payload())
 
   assert session.status_code == 200
-  assert session.json()["session"] == {"id": str(SESSION_ID), "deviceMode": "browser", "status": "pending", "expiresAt": session.json()["session"]["expiresAt"]}
+  assert session.json()["session"] == {"id": str(SESSION_ID), "deviceMode": "browser", "status": "pending", "expiresAt": session.json()["session"]["expiresAt"], "biometric": {"enrollmentVersion": None, "state": "unregistered"}}
   assert foreign.status_code == 403
   assert foreign.json() == {"error": "Token does not belong to this session"}
   assert event.status_code == 201
@@ -163,3 +178,71 @@ def test_event_service_rejects_inactive_or_out_of_window_events_before_persisten
   with pytest.raises(ValueError, match="outside the accepted range"):
     asyncio.run(service.record(SESSION_ID, stale))
   assert len(event_repository.events) == 1
+
+
+def create_client_with_origin(origin: str) -> tuple[TestClient, SessionRepositoryFake]:
+  sessions = SessionRepositoryFake()
+  session_service = SessionService(sessions)
+  return TestClient(create_app(
+    NullHealthService(), event_service=EventService(session_service, EventRepositoryFake()),
+    jwt_secret="test-secret-that-is-at-least-thirty-two-characters",
+    moodle_integration_key="moodle-key-that-is-at-least-thirty-two-characters",
+    session_service=session_service, web_origin=origin
+  )), sessions
+
+
+def test_cors_allows_only_configured_origin_and_preflight_browser_headers() -> None:
+  client, _ = create_client_with_origin("https://proctoring.example.edu")
+  allowed = client.options("/v1/sessions/anything/events", headers={"Origin": "https://proctoring.example.edu", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type"})
+  denied = client.options("/v1/sessions/anything/events", headers={"Origin": "https://other.example.edu", "Access-Control-Request-Method": "POST"})
+
+  assert allowed.status_code == 200
+  assert allowed.headers["access-control-allow-origin"] == "https://proctoring.example.edu"
+  assert "authorization" in allowed.headers["access-control-allow-headers"].lower()
+  assert "content-type" in allowed.headers["access-control-allow-headers"].lower()
+  assert "access-control-allow-origin" not in denied.headers
+
+
+def test_session_and_event_non_object_json_bodies_keep_node_error_responses() -> None:
+  client, _ = create_client()
+  key_headers = {"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}
+  for body in ("null", "[]"):
+    response = client.post("/v1/internal/sessions", headers=key_headers, content=body)
+    assert response.status_code == 400
+    assert response.json()["error"] == "Invalid session payload"
+  create_session(client)
+  token = client.post(f"/v1/internal/sessions/{SESSION_ID}/browser-token", headers=key_headers).json()["browserToken"]
+  for body in ("null", "[]"):
+    response = client.post(f"/v1/sessions/{SESSION_ID}/events", headers={"Authorization": f"Bearer {token}"}, content=body)
+    assert response.status_code == 400
+    assert response.json() == {"error": "Invalid event payload"}
+
+
+def test_browser_token_rejects_tampering_and_missing_required_claims() -> None:
+  client, _ = create_client()
+  create_session(client)
+  key_headers = {"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}
+  token = client.post(f"/v1/internal/sessions/{SESSION_ID}/browser-token", headers=key_headers).json()["browserToken"]
+  tampered = f"{token[:-1]}{'a' if token[-1] != 'a' else 'b'}"
+  incomplete = jwt.encode({"sessionId": str(SESSION_ID), "aud": "proctoring-browser", "exp": NOW + timedelta(minutes=5)}, "test-secret-that-is-at-least-thirty-two-characters", algorithm="HS256")
+  missing_expiration = jwt.encode({"sessionId": str(SESSION_ID), "moodleAttemptId": "attempt-1", "deviceMode": "browser", "aud": "proctoring-browser", "iat": NOW}, "test-secret-that-is-at-least-thirty-two-characters", algorithm="HS256")
+  for candidate in (tampered, incomplete, missing_expiration):
+    response = client.get(f"/v1/sessions/{SESSION_ID}", headers={"Authorization": f"Bearer {candidate}"})
+    assert response.status_code == 401
+    assert response.json() == {"error": "Invalid or expired browser token"}
+
+
+def test_browser_projection_includes_unregistered_biometric_default() -> None:
+  client, _ = create_client()
+  create_session(client)
+  token = client.post(f"/v1/internal/sessions/{SESSION_ID}/browser-token", headers={"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"}).json()["browserToken"]
+  response = client.get(f"/v1/sessions/{SESSION_ID}", headers={"Authorization": f"Bearer {token}"})
+  assert response.json()["session"]["biometric"] == {"enrollmentVersion": None, "state": "unregistered"}
+
+
+@pytest.mark.parametrize("identifier", ["{e3d9cce1-a5b8-4bfe-88e1-68a57475266d}", "E3D9CCE1-A5B8-4BFE-88E1-68A57475266D"])
+def test_internal_routes_reject_noncanonical_uuid_identifiers(identifier: str) -> None:
+  client, _ = create_client()
+  response = client.post(f"/v1/internal/sessions/{identifier}/status", headers={"X-Moodle-Integration-Key": "moodle-key-that-is-at-least-thirty-two-characters"})
+  assert response.status_code == 400
+  assert response.json() == {"error": "Invalid session identifier"}

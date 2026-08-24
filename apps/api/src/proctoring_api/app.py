@@ -4,6 +4,7 @@ from typing import Annotated, Protocol, cast
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -16,7 +17,6 @@ from proctoring_api.auth import (
 from proctoring_api.services.events import (
   EventRateLimitError,
   EventService,
-  EventTimestampError,
   SessionUnavailableError
 )
 from proctoring_api.services.sessions import SessionService
@@ -36,12 +36,16 @@ def create_app(
   session_service: SessionService | None = None,
   event_service: EventService | None = None,
   jwt_secret: str | None = None,
-  moodle_integration_key: str | None = None
+  moodle_integration_key: str | None = None,
+  web_origin: str | None = None
 ) -> FastAPI:
   """Build an HTTP-only application without loading runtime configuration or models."""
 
   app = FastAPI()
   app.state.health_service = health_service
+  if web_origin:
+    app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=False,
+      allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
 
   @app.exception_handler(HTTPException)
   async def http_exception(_: Request, error: HTTPException) -> JSONResponse:
@@ -87,15 +91,14 @@ def _register_task_two_routes(
 
   @app.post("/v1/internal/sessions", status_code=status.HTTP_201_CREATED)
   async def create_session(
-    payload: dict,
+    request: Request,
     _: Annotated[None, Depends(moodle_auth)]
   ) -> dict:
     try:
+      payload = await _object_json(request)
       session = await session_service.create(CreateSessionInput.model_validate(payload))
-    except ValidationError as error:
-      return JSONResponse(status_code=400, content={
-        "error": "Invalid session payload", "details": error.errors()
-      })
+    except (ValidationError, ValueError):
+      return JSONResponse(status_code=400, content={"error": "Invalid session payload"})
     return {"session": session.model_dump(mode="json", by_alias=True)}
 
   @app.post("/v1/internal/sessions/{session_id}/browser-token")
@@ -132,18 +135,20 @@ def _register_task_two_routes(
     if not session:
       raise HTTPException(status_code=404, detail="Active session not found")
     return {"session": {"id": str(session.id), "deviceMode": session.device_mode.value,
-      "status": session.status.value, "expiresAt": session.expires_at}}
+      "status": session.status.value, "expiresAt": session.expires_at,
+      "biometric": {"enrollmentVersion": None, "state": "unregistered"}}}
 
   @app.post("/v1/sessions/{session_id}/events", status_code=status.HTTP_201_CREATED)
   async def record_event(
     session_id: str,
-    payload: dict,
+    request: Request,
     claims: Annotated[dict, Depends(browser_auth)]
   ) -> dict:
     parsed_id = _require_browser_ownership(session_id, claims)
     try:
+      payload = await _object_json(request)
       return await event_service.record(parsed_id, payload)
-    except (ValidationError, EventTimestampError):
+    except (ValidationError, ValueError):
       return JSONResponse(status_code=400, content={"error": "Invalid event payload"})
     except SessionUnavailableError:
       return JSONResponse(status_code=409, content={"error": "Session is not active"})
@@ -153,9 +158,12 @@ def _register_task_two_routes(
 
 def _parse_session_id(value: str) -> UUID:
   try:
-    return UUID(value)
+    parsed = UUID(value)
   except ValueError as error:
     raise HTTPException(status_code=400, detail="Invalid session identifier") from error
+  if str(parsed) != value:
+    raise HTTPException(status_code=400, detail="Invalid session identifier")
+  return parsed
 
 
 def _require_browser_ownership(session_id: str, claims: dict) -> UUID:
@@ -163,3 +171,13 @@ def _require_browser_ownership(session_id: str, claims: dict) -> UUID:
   if claims.get("sessionId") != str(parsed_id):
     raise HTTPException(status_code=403, detail="Token does not belong to this session")
   return parsed_id
+
+
+async def _object_json(request: Request) -> dict:
+  try:
+    payload = await request.json()
+  except ValueError as error:
+    raise ValueError("Request body must be JSON") from error
+  if not isinstance(payload, dict):
+    raise ValueError("Request body must be an object")
+  return payload

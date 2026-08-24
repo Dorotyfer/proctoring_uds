@@ -49,23 +49,28 @@ def split_sql_statements(sql: str) -> list[str]:
 
 
 class MigrationRunner:
-  """Record each applied filename after its raw SQL succeeds transactionally."""
+  """Serialize DDL and record a migration only after every statement succeeds."""
 
   def __init__(self, connection: AsyncConnection, migrations_path: Path | None = None) -> None:
     self._connection = connection
     self._migrations_path = migrations_path
 
   async def apply(self) -> list[str]:
-    async with self._connection.begin():
+    acquired = await self._connection.execute(text("""
+      SELECT GET_LOCK(:name, :timeout) AS acquired
+    """), {"name": "proctoring_schema_migrations", "timeout": 30})
+    lock = acquired.mappings().first()
+    if not lock or not lock["acquired"]:
+      raise MigrationLockError("Could not acquire proctoring migration lock")
+    try:
       await self._connection.execute(text("""
         CREATE TABLE IF NOT EXISTS proctoring_schema_migrations (
           name VARCHAR(255) PRIMARY KEY,
           applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       """))
-    applied = []
-    for path in migration_files(self._migrations_path):
-      async with self._connection.begin():
+      applied = []
+      for path in migration_files(self._migrations_path):
         existing = await self._connection.execute(text("""
           SELECT 1 FROM proctoring_schema_migrations WHERE name = :name
         """), {"name": path.name})
@@ -77,8 +82,13 @@ class MigrationRunner:
         await self._connection.execute(text("""
           INSERT INTO proctoring_schema_migrations (name) VALUES (:name)
         """), {"name": path.name})
-      applied.append(path.name)
-    return applied
+        await self._connection.commit()
+        applied.append(path.name)
+      return applied
+    finally:
+      await self._connection.execute(text("SELECT RELEASE_LOCK(:name)"), {
+        "name": "proctoring_schema_migrations"
+      })
 
   async def _ensure_legacy_foreign_keys(self, filename: str) -> None:
     constraints = {
@@ -103,6 +113,10 @@ class MigrationRunner:
     """), {"table": table, "name": name})
     if not result.first():
       await self._connection.execute(text(statement))
+
+
+class MigrationLockError(RuntimeError):
+  """Raised when another migration runner holds the MariaDB advisory lock."""
 
 
 async def run_cli() -> None:

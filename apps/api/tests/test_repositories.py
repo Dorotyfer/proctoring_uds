@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 
 from proctoring_api.db.rows import parse_json, to_iso_datetime, to_mariadb_datetime
-from proctoring_api.models import CreateSessionInput, SessionEventInput
+from proctoring_api.models import CreateSessionInput, FailurePolicy, SessionEventInput
 from proctoring_api.repositories.events import EventRateLimitError, SqlEventRepository
 from proctoring_api.repositories.sessions import SqlSessionRepository
 
@@ -71,13 +71,22 @@ def test_session_repository_upserts_course_and_attempt_then_maps_the_selected_ro
   assert connection.statements[1][1]["moodle_attempt_id"] == "attempt-1"
 
 
+def test_session_repository_persists_and_rereads_failure_policy() -> None:
+  allowed = input_data().model_copy(update={"failure_policy": FailurePolicy.ALLOW_WITH_ALERT})
+  connection = Connection([Result(), Result(), Result([session_row() | {"failure_policy": "allow_with_alert"}])])
+  session = asyncio.run(SqlSessionRepository(Engine(connection)).create(allowed))
+
+  assert connection.statements[1][1]["failure_policy"] == "allow_with_alert"
+  assert session.failure_policy.value == "allow_with_alert"
+
+
 def event_input() -> SessionEventInput:
   return SessionEventInput.model_validate({"clientEventId": "56cc96a8-2ff1-41ca-9917-dd967c297319", "type": "face_absent", "occurredAt": "2026-08-24T12:00:00Z"})
 
 
 def test_event_repository_returns_existing_event_before_rate_counting() -> None:
   existing = {"id": "3a60ebc0-c0be-4a2d-a2ce-a49cd9e2f20f", "session_id": "e3d9cce1-a5b8-4bfe-88e1-68a57475266d", "client_event_id": "56cc96a8-2ff1-41ca-9917-dd967c297319", "type": "face_absent", "occurred_at": "2026-08-24 12:00:00.000", "metadata": "{}", "received_at": "2026-08-24 12:00:01.000"}
-  connection = Connection([Result(), Result([existing])])
+  connection = Connection([Result([{"id": existing["session_id"], "status": "active"}]), Result([existing])])
 
   event = asyncio.run(SqlEventRepository(Engine(connection)).create(UUID(existing["session_id"]), event_input()))
 
@@ -86,8 +95,17 @@ def test_event_repository_returns_existing_event_before_rate_counting() -> None:
 
 
 def test_event_repository_enforces_the_120_per_minute_limit_inside_the_locked_transaction() -> None:
-  connection = Connection([Result(), Result(), Result([{"total": 120}])])
+  connection = Connection([Result([{"id": "e3d9cce1-a5b8-4bfe-88e1-68a57475266d", "status": "active"}]), Result(), Result([{"total": 120}])])
 
   with pytest.raises(EventRateLimitError):
     asyncio.run(SqlEventRepository(Engine(connection)).create(UUID("e3d9cce1-a5b8-4bfe-88e1-68a57475266d"), event_input()))
   assert "FOR UPDATE" in connection.statements[0][0]
+
+
+def test_event_repository_revalidates_locked_session_state_before_idempotency() -> None:
+  connection = Connection([Result()])
+  from proctoring_api.services.events import SessionUnavailableError
+
+  with pytest.raises(SessionUnavailableError):
+    asyncio.run(SqlEventRepository(Engine(connection)).create(UUID("e3d9cce1-a5b8-4bfe-88e1-68a57475266d"), event_input()))
+  assert "expires_at > UTC_TIMESTAMP(3)" in connection.statements[0][0]

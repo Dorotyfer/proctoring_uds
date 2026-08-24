@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from proctoring_api.db.rows import parse_json, to_iso_datetime, to_mariadb_datetime
 from proctoring_api.models import SessionEventInput
-from proctoring_api.services.events import EventRateLimitError
+from proctoring_api.services.events import EventRateLimitError, SessionUnavailableError
 
 
 class SqlEventRepository:
@@ -18,7 +18,13 @@ class SqlEventRepository:
 
   async def create(self, session_id: UUID, event: SessionEventInput) -> dict[str, Any]:
     async with self._engine.begin() as connection:
-      await connection.execute(text("SELECT id FROM proctoring_sessions WHERE id = :session_id FOR UPDATE"), {"session_id": str(session_id)})
+      locked = await connection.execute(text("""
+        SELECT id, status FROM proctoring_sessions
+        WHERE id = :session_id AND status IN ('pending', 'active') AND expires_at > UTC_TIMESTAMP(3)
+        FOR UPDATE
+      """), {"session_id": str(session_id)})
+      if not locked.mappings().first():
+        raise SessionUnavailableError("Active session not found")
       existing = await connection.execute(text(_event_select("session_id = :session_id AND client_event_id = :client_event_id")), {"session_id": str(session_id), "client_event_id": str(event.client_event_id)})
       row = existing.mappings().first()
       if row:
