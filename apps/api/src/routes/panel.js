@@ -128,6 +128,13 @@ export async function registerPanelRoutes(app, options) {
     } else {
       session.evidence = session.evidence.filter((item) => item.kind === 'alert');
     }
+    if (options.riskAnalysisService) {
+      session.risk = options.riskAnalysisService.analyzeSessionRisk({
+        alerts: session.alerts,
+        controlLevel: session.controlLevel,
+        events: session.events
+      });
+    }
     return { session };
   });
 

@@ -14,6 +14,7 @@ import { createBiometricProfileService } from './services/biometric-profile-serv
 import { createEventService } from './services/event-service.js';
 import { createIncidentService } from './services/incident-service.js';
 import { createSessionService } from './services/session-service.js';
+import { analyzeSessionRisk } from './services/session-risk-analysis-service.js';
 import { createObjectStorageService } from './services/object-storage-service.js';
 import { createPanelAuthService } from './services/panel-auth-service.js';
 import { createResilientObjectStorage } from './services/resilient-object-storage.js';
@@ -62,6 +63,7 @@ const app = await buildApp({
     evidenceService,
     biometricProfileRepository,
     repository: panelRepository,
+    riskAnalysisService: { analyzeSessionRisk },
     secureCookies: config.apiOrigin.startsWith('https://'),
     webOrigin: config.webOrigin
   },

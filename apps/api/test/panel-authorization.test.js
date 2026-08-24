@@ -290,6 +290,51 @@ test('returns only alert evidence in an authorized session detail', async () => 
   await app.close();
 });
 
+test('returns an explainable risk analysis in session detail', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    riskAnalysisService: {
+      analyzeSessionRisk(input) {
+        received.push(input);
+        return {
+          category: 'medium_risk',
+          controlLevel: 'high',
+          counts: { face_absent: 2 },
+          reasons: [{ code: 'face_absent', count: 2, label: 'Rostro ausente', points: 20 }],
+          score: 20
+        };
+      }
+    },
+    repository: {
+      async getSession() {
+        return {
+          alerts: [],
+          controlLevel: 'high',
+          events: [{ type: 'face_absent' }],
+          evidence: [],
+          id: '55555555-5555-4555-8555-555555555555'
+        };
+      }
+    }
+  });
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.institution]);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/sessions/55555555-5555-4555-8555-555555555555',
+    headers: { cookie }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().session.risk.category, 'medium_risk');
+  assert.deepEqual(received, [{
+    alerts: [],
+    controlLevel: 'high',
+    events: [{ type: 'face_absent' }]
+  }]);
+  await app.close();
+});
+
 test('refuses direct access to non-alert evidence', async () => {
   const accessed = [];
   const app = await buildPanelApp({
@@ -375,6 +420,7 @@ async function buildPanelApp(overrides = {}) {
       evidenceRepository: overrides.evidenceRepository ?? {},
       evidenceService: overrides.evidenceService ?? {},
       biometricProfileRepository: overrides.biometricProfileRepository ?? {},
+      riskAnalysisService: overrides.riskAnalysisService ?? null,
       repository: overrides.repository ?? {},
       secureCookies: false,
       webOrigin: 'http://web.test'

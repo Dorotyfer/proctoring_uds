@@ -1,5 +1,6 @@
 import { createMysqlPool } from '../db/mysql-pool.js';
 import { parseJson, toIsoDate } from '../db/mysql-row.js';
+import { analyzeSessionRisk } from '../services/session-risk-analysis-service.js';
 
 export function createPanelRepository(databaseUrl) {
   const pool = createMysqlPool(databaseUrl);
@@ -59,13 +60,16 @@ export function createPanelRepository(databaseUrl) {
       const [rows] = await pool.execute(`
         SELECT sessions.id, sessions.moodle_course_id, sessions.moodle_quiz_id,
           sessions.moodle_attempt_id, sessions.quiz_name, sessions.student_name,
-          sessions.student_document, sessions.device_mode, sessions.status,
+          sessions.student_document, sessions.device_mode, sessions.control_level, sessions.status,
           sessions.created_at, sessions.prepared_at,
           COALESCE(MAX(biometric_checks.result), IF(MAX(biometric_profiles.status = 'active'), 'enrolled', 'unregistered')) AS biometric_status,
-          COUNT(alerts.id) AS alert_count,
-          COALESCE(SUM(alerts.status = 'open'), 0) AS open_alert_count
+          COUNT(DISTINCT alerts.id) AS alert_count,
+          COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) AS open_alert_count,
+          GROUP_CONCAT(DISTINCT events.type) AS event_types,
+          GROUP_CONCAT(DISTINCT alerts.type) AS alert_types
         FROM proctoring_sessions sessions
         LEFT JOIN proctoring_alerts alerts ON alerts.session_id = sessions.id
+        LEFT JOIN proctoring_events events ON events.session_id = sessions.id
         LEFT JOIN proctoring_biometric_checks biometric_checks ON biometric_checks.session_id = sessions.id
         LEFT JOIN proctoring_biometric_profiles biometric_profiles ON biometric_profiles.moodle_user_id = sessions.moodle_user_id
         ${filters.whereSql}
@@ -86,10 +90,14 @@ export function createPanelRepository(databaseUrl) {
           sessions.moodle_attempt_id, sessions.device_mode, sessions.status,
           sessions.created_at, sessions.prepared_at,
           COALESCE(MAX(biometric_checks.result), IF(MAX(biometric_profiles.status = 'active'), 'enrolled', 'unregistered')) AS biometric_status,
-          COUNT(alerts.id) AS alert_count,
-          COALESCE(SUM(alerts.status = 'open'), 0) AS open_alert_count
+          COUNT(DISTINCT alerts.id) AS alert_count,
+          COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) AS open_alert_count,
+          sessions.control_level,
+          GROUP_CONCAT(DISTINCT events.type) AS event_types,
+          GROUP_CONCAT(DISTINCT alerts.type) AS alert_types
         FROM proctoring_sessions sessions
         LEFT JOIN proctoring_alerts alerts ON alerts.session_id = sessions.id
+        LEFT JOIN proctoring_events events ON events.session_id = sessions.id
         LEFT JOIN proctoring_biometric_checks biometric_checks ON biometric_checks.session_id = sessions.id
         LEFT JOIN proctoring_biometric_profiles biometric_profiles ON biometric_profiles.moodle_user_id = sessions.moodle_user_id
         ${filter.sql}
@@ -141,6 +149,7 @@ export function createPanelRepository(databaseUrl) {
         studentName: row.student_name ?? null,
         studentDocument: row.student_document ?? null,
         deviceMode: row.device_mode,
+        controlLevel: row.control_level ?? 'medium',
         status: row.status,
         biometric: {
           enrollmentVersion: row.biometric_enrollment_version === null
@@ -232,6 +241,12 @@ function courseScopeFilter(scope, prefix) {
 }
 
 function mapSessionSummary(row) {
+  const risk = analyzeSessionRisk({
+    alerts: splitTypes(row.alert_types),
+    controlLevel: row.control_level,
+    events: splitTypes(row.event_types)
+  });
+
   return {
     id: row.id,
     courseId: row.moodle_course_id,
@@ -241,6 +256,9 @@ function mapSessionSummary(row) {
     studentName: row.student_name ?? null,
     studentDocumentLast4: maskStudentDocument(row.student_document),
     deviceMode: row.device_mode,
+    controlLevel: row.control_level ?? 'medium',
+    riskCategory: risk.category,
+    riskScore: risk.score,
     status: row.status,
     biometricStatus: row.biometric_status ?? 'unregistered',
     createdAt: toIsoDate(row.created_at),
@@ -248,6 +266,10 @@ function mapSessionSummary(row) {
     alertCount: Number(row.alert_count),
     openAlertCount: Number(row.open_alert_count)
   };
+}
+
+function splitTypes(value) {
+  return value ? String(value).split(',').map((type) => ({ type })) : [];
 }
 
 export function maskStudentDocument(document) {
@@ -313,11 +335,11 @@ function sessionListFilters(courseId, scope, query) {
   }
   const having = [];
   if (query.alerts === 'open') {
-    having.push("SUM(alerts.status = 'open') > 0");
+    having.push("COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) > 0");
   } else if (query.alerts === 'any') {
-    having.push('COUNT(alerts.id) > 0');
+    having.push('COUNT(DISTINCT alerts.id) > 0');
   } else if (query.alerts === 'none') {
-    having.push('COUNT(alerts.id) = 0');
+    having.push('COUNT(DISTINCT alerts.id) = 0');
   }
   return {
     empty: false,
