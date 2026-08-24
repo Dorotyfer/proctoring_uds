@@ -32,6 +32,9 @@ class quizaccess_proctoring extends quiz_access_rule_base {
         $attemptid = optional_param('attempt', 0, PARAM_INT);
         if ($attemptid > 0) {
             $session = $DB->get_record('local_proctoring_sessions', ['attemptid' => $attemptid]);
+            if ($session && in_array($session->status, ['completed', 'close_failed'], true)) {
+                return;
+            }
             $ready = $session && $session->status === 'active';
             $page->requires->js_call_amd('quizaccess_proctoring/launch', 'start', [$attemptid, $ready]);
         }
