@@ -65,3 +65,43 @@ GREEN output: `70 passed in 1.52s` using Python `3.12.13`.
 ## Commit
 
 Implementation commit: `acb6f2c4d41988ef9a5f6234eae5fb0d287caedc` (`feat: add FastAPI session and event compatibility`).
+
+## Review round 1
+
+Added exact-origin CORS, raw object-body parsing, strict required browser-JWT claims, canonical UUID checks, default browser biometric projection, production Uvicorn composition/lifespan disposal, DB-locked event state revalidation, base SQLAlchemy/asyncmy dependencies, migration advisory locking, and additive `008_session_failure_policy.sql`. Migration 008 persists `block|allow_with_alert`; 001-007 remain byte-for-byte in their original location.
+
+RED command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests\test_sessions_events.py apps\api\tests\test_repositories.py apps\api\tests\test_migrations.py apps\api\tests\test_runtime.py -q
+```
+
+RED output: collection failed with `ImportError: cannot import name 'MigrationLockError'` and `ModuleNotFoundError: No module named 'proctoring_api.main'`.
+
+Additional RED command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests\test_migrations.py::test_migration_runner_applies_raw_sql_once_and_skips_previously_recorded_files -q
+```
+
+RED output: `assert 0 == 1` for the missing explicit post-DDL migration-record commit.
+
+Focused GREEN command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests\test_sessions_events.py apps\api\tests\test_repositories.py apps\api\tests\test_migrations.py apps\api\tests\test_runtime.py -q
+```
+
+GREEN output: `23 passed in 1.90s`.
+
+Full GREEN command:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest apps\api\tests -q
+```
+
+GREEN output: `82 passed in 2.19s`; `git diff --check` completed without errors. Base-package installation was also verified with `& .\.venv\Scripts\python.exe -m pip install -e '.\apps\api[test]'`.
+
+Review implementation commit: `fd6e42c7202bfaa2740cca372c07103ccfebd3d6` (`fix: harden FastAPI session runtime compatibility`).
+
+Live MariaDB integration remains deferred because no disposable MariaDB/`TEST_DATABASE_URL` is available. SQL execution, locked-state race behavior, advisory-lock release, failed-DDL recording semantics, and row mapping are covered with strict async fakes; production integration is intentionally environment-gated.
