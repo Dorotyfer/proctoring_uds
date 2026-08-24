@@ -12,7 +12,7 @@ async def check_infrastructure() -> bool:
   dependencies = create_runtime_dependencies(settings)
   try:
     result = await ReadinessService(
-      DatabaseHealthService(dependencies.sessions), dependencies.object_storage, QueueReadiness()
+      DatabaseHealthService(dependencies.sessions), dependencies.object_storage, QueueReadiness(dependencies.analyses)
     ).check()
     if all(status == "available" for status in result.values()):
       print("Infrastructure ready")

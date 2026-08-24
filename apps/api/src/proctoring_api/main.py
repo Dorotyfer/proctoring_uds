@@ -16,12 +16,14 @@ from proctoring_api.repositories.evidence import SqlEvidenceRepository
 from proctoring_api.repositories.sessions import SqlSessionRepository
 from proctoring_api.repositories.panel import SqlPanelRepository
 from proctoring_api.repositories.biometric_profiles import SqlBiometricProfileRepository
+from proctoring_api.repositories.analysis import SqlAnalysisRepository
 from proctoring_api.services.events import EventService
 from proctoring_api.services.evidence import EvidenceService
 from proctoring_api.services.evidence_crypto import EvidenceEncryptionService
 from proctoring_api.services.object_storage import S3ObjectStorage
 from proctoring_api.services.readiness import QueueReadiness, ReadinessService
 from proctoring_api.services.sessions import SessionService
+from proctoring_api.services.analysis import AnalysisQueueService
 
 
 class DatabaseHealthService:
@@ -43,6 +45,7 @@ class RuntimeDependencies:
   evidence_service: EvidenceService
   panel_repository: SqlPanelRepository | None = None
   biometric_profiles: SqlBiometricProfileRepository | None = None
+  analyses: SqlAnalysisRepository | None = None
 
   async def close(self) -> None:
     try:
@@ -75,7 +78,7 @@ def create_runtime_dependencies(
     retention_days=settings.evidence_retention_days, content_token_secret=settings.jwt_secret
   )
   return RuntimeDependencies(engine, sessions, evidence_repository, object_storage, evidence_service,
-    SqlPanelRepository(engine), SqlBiometricProfileRepository(engine))
+    SqlPanelRepository(engine), SqlBiometricProfileRepository(engine), SqlAnalysisRepository(engine))
 
 
 def create_runtime_app(
@@ -87,9 +90,13 @@ def create_runtime_app(
 
   dependencies = create_runtime_dependencies(settings, engine_factory, storage_factory)
   sessions = dependencies.sessions
+  analyses = dependencies.analyses
+  if analyses is None:
+    raise RuntimeError("Analysis repository is required")
+  analysis_service = AnalysisQueueService(analyses, dependencies.object_storage, settings.evidence_encryption_key_bytes)
   app = create_app(
     DatabaseHealthService(sessions),
-    readiness_service=ReadinessService(DatabaseHealthService(sessions), dependencies.object_storage, QueueReadiness()),
+    readiness_service=ReadinessService(DatabaseHealthService(sessions), dependencies.object_storage, QueueReadiness(analyses)),
     evidence_service=dependencies.evidence_service,
     evidence_repository=dependencies.evidence_repository,
     object_storage=dependencies.object_storage,
@@ -101,7 +108,8 @@ def create_runtime_app(
     panel_repository=dependencies.panel_repository,
     biometric_profile_repository=dependencies.biometric_profiles,
     panel_sso_secret=settings.panel_sso_secret,
-    api_public_url=settings.api_base_url
+    api_public_url=settings.api_base_url,
+    analysis_service=analysis_service
   )
 
   @asynccontextmanager

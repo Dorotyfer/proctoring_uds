@@ -8,10 +8,13 @@ class ReadinessDependency(Protocol):
 
 
 class QueueReadiness:
-  """Temporary queue seam. Task 5 replaces this with its durable queue checker."""
+  """Checks durable queue reachability without claiming work."""
+
+  def __init__(self, repository: ReadinessDependency) -> None:
+    self._repository = repository
 
   async def check(self) -> None:
-    return None
+    await self._repository.check()
 
 
 class ReadinessService:

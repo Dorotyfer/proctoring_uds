@@ -3,7 +3,7 @@
 from typing import Annotated, Protocol, cast
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -46,7 +46,8 @@ def create_app(
   panel_repository: object | None = None,
   biometric_profile_repository: object | None = None,
   panel_sso_secret: str | None = None,
-  api_public_url: str | None = None
+  api_public_url: str | None = None,
+  analysis_service: object | None = None
 ) -> FastAPI:
   """Build an HTTP-only application without loading runtime configuration or models."""
 
@@ -58,6 +59,7 @@ def create_app(
   app.state.evidence_service = evidence_service
   app.state.evidence_repository = evidence_repository
   app.state.object_storage = object_storage
+  app.state.analysis_service = analysis_service
   canonical_web_origin = canonical_http_origin(web_origin) if web_origin else None
   if canonical_web_origin:
     app.add_middleware(CORSMiddleware, allow_origins=[canonical_web_origin], allow_credentials=True,
@@ -104,6 +106,8 @@ def create_app(
     app.include_router(register_panel_routes(panel_repository, evidence_service, biometric_profile_repository,
       jwt_secret=jwt_secret, panel_sso_secret=panel_sso_secret, web_origin=canonical_web_origin,
       api_public_url=api_public_url))
+  if analysis_service and jwt_secret:
+    _register_analysis_routes(app, analysis_service, jwt_secret)
   return app
 
 
@@ -275,3 +279,88 @@ def _zod_received_type(value: object) -> str:
   if isinstance(value, dict):
     return "object"
   return type(value).__name__
+
+
+def _register_analysis_routes(app: FastAPI, analysis_service: object, jwt_secret: str) -> None:
+  """Browser-only staged analysis API. Images are consumed immediately and never logged."""
+
+  from proctoring_api.services.analysis import AnalysisCapacityError, ChallengeExpiredError, ConsentRequiredError, ImageValidationError
+
+  browser_auth = require_browser_claims(jwt_secret)
+
+  @app.post("/v1/sessions/{session_id}/liveness-challenges", status_code=status.HTTP_201_CREATED)
+  async def liveness_challenge(session_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    challenge = await analysis_service.issue_challenge(str(parsed_id))
+    return {"challenge": challenge}
+
+  @app.post("/v1/sessions/{session_id}/preparation-analyses", status_code=status.HTTP_202_ACCEPTED)
+  async def preparation_analysis(
+    session_id: str,
+    analysis_id: Annotated[str, Form(alias="analysisId")],
+    consent_accepted: Annotated[str, Form(alias="consentAccepted")],
+    challenge_id: Annotated[str, Form(alias="challengeId")],
+    center_start: Annotated[UploadFile, File(alias="centerStart")],
+    turn: Annotated[UploadFile, File()],
+    center_end: Annotated[UploadFile, File(alias="centerEnd")],
+    claims: Annotated[dict, Depends(browser_auth)]
+  ) -> dict:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    _parse_analysis_id(analysis_id)
+    if consent_accepted != "true":
+      return JSONResponse(status_code=400, content={"error": "Consent is required"})
+    try:
+      files = [center_start, turn, center_end]
+      frames = [await file.read() for file in files]
+      analysis = await analysis_service.enqueue_preparation(str(parsed_id), analysis_id, True, challenge_id, frames,
+        [file.content_type for file in files])
+      return {"analysis": analysis}
+    except ChallengeExpiredError:
+      return JSONResponse(status_code=409, content={"error": "Challenge is used or expired"})
+    except ConsentRequiredError:
+      return JSONResponse(status_code=400, content={"error": "Consent is required"})
+    except ImageValidationError:
+      return JSONResponse(status_code=400, content={"error": "Invalid JPEG upload"})
+    except AnalysisCapacityError as error:
+      return JSONResponse(status_code=429, content={"error": "Analysis queue is saturated"}, headers={"Retry-After": str(int(error.retry_after_seconds))})
+
+  @app.post("/v1/sessions/{session_id}/monitoring-frames", status_code=status.HTTP_202_ACCEPTED)
+  async def monitoring_frame(
+    session_id: str,
+    analysis_id: Annotated[str, Form(alias="analysisId")],
+    frame: Annotated[UploadFile, File()],
+    claims: Annotated[dict, Depends(browser_auth)]
+  ) -> dict:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    _parse_analysis_id(analysis_id)
+    try:
+      analysis = await analysis_service.enqueue_monitoring(str(parsed_id), analysis_id, await frame.read(), frame.content_type)
+      return {"analysis": analysis}
+    except ImageValidationError:
+      return JSONResponse(status_code=400, content={"error": "Invalid JPEG upload"})
+    except AnalysisCapacityError as error:
+      return JSONResponse(status_code=429, content={"error": "Analysis queue is saturated"}, headers={"Retry-After": str(int(error.retry_after_seconds))})
+
+  @app.get("/v1/sessions/{session_id}/analyses/{analysis_id}")
+  async def get_analysis(session_id: str, analysis_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    _parse_analysis_id(analysis_id)
+    analysis = await analysis_service.get(str(parsed_id), analysis_id)
+    if not analysis:
+      raise HTTPException(status_code=404, detail="Analysis not found")
+    return {"analysis": analysis}
+
+  @app.get("/v1/sessions/{session_id}/monitoring-status")
+  async def get_monitoring_status(session_id: str, claims: Annotated[dict, Depends(browser_auth)]) -> dict:
+    parsed_id = _require_browser_ownership(session_id, claims)
+    return await analysis_service.monitoring_status(str(parsed_id))
+
+
+def _parse_analysis_id(value: str) -> str:
+  try:
+    parsed = UUID(value)
+  except ValueError as error:
+    raise HTTPException(status_code=400, detail="Invalid analysis identifier") from error
+  if str(parsed).lower() != value.lower():
+    raise HTTPException(status_code=400, detail="Invalid analysis identifier")
+  return str(parsed)
