@@ -44,7 +44,7 @@ def create_app(
   app = FastAPI()
   app.state.health_service = health_service
   if web_origin:
-    app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=False,
+    app.add_middleware(CORSMiddleware, allow_origins=[web_origin], allow_credentials=True,
       allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
 
   @app.exception_handler(HTTPException)
@@ -97,7 +97,11 @@ def _register_task_two_routes(
     try:
       payload = await _object_json(request)
       session = await session_service.create(CreateSessionInput.model_validate(payload))
-    except (ValidationError, ValueError):
+    except ValidationError as error:
+      return JSONResponse(status_code=400, content={
+        "error": "Invalid session payload", "details": _zod_issues(error)
+      })
+    except ValueError:
       return JSONResponse(status_code=400, content={"error": "Invalid session payload"})
     return {"session": session.model_dump(mode="json", by_alias=True)}
 
@@ -148,10 +152,10 @@ def _register_task_two_routes(
     try:
       payload = await _object_json(request)
       return await event_service.record(parsed_id, payload)
-    except (ValidationError, ValueError):
-      return JSONResponse(status_code=400, content={"error": "Invalid event payload"})
     except SessionUnavailableError:
       return JSONResponse(status_code=409, content={"error": "Session is not active"})
+    except (ValidationError, ValueError):
+      return JSONResponse(status_code=400, content={"error": "Invalid event payload"})
     except EventRateLimitError:
       return JSONResponse(status_code=429, content={"error": "Event rate limit exceeded"})
 
@@ -161,7 +165,7 @@ def _parse_session_id(value: str) -> UUID:
     parsed = UUID(value)
   except ValueError as error:
     raise HTTPException(status_code=400, detail="Invalid session identifier") from error
-  if str(parsed) != value:
+  if str(parsed).lower() != value.lower():
     raise HTTPException(status_code=400, detail="Invalid session identifier")
   return parsed
 
@@ -181,3 +185,21 @@ async def _object_json(request: Request) -> dict:
   if not isinstance(payload, dict):
     raise ValueError("Request body must be an object")
   return payload
+
+
+def _zod_issues(error: ValidationError) -> list[dict]:
+  """Translate the supported session-contract errors to the established Zod wire form."""
+
+  issues = []
+  for issue in error.errors():
+    path = list(issue["loc"])
+    if issue["type"] == "missing":
+      issues.append({"code": "invalid_type", "expected": "string", "received": "undefined",
+        "path": path, "message": "Required"})
+    elif path == ["deviceMode"] and issue["type"] == "enum":
+      received = issue.get("input")
+      issues.append({"code": "invalid_enum_value", "options": ["browser", "seb"], "path": path,
+        "message": f"Invalid enum value. Expected 'browser' | 'seb', received '{received}'"})
+    else:
+      issues.append({"code": "custom", "path": path, "message": issue["msg"]})
+  return issues

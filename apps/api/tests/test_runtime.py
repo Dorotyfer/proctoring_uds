@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from proctoring_api.config import Settings
 from proctoring_api.main import create_runtime_app
+from proctoring_api.db.engine import create_mariadb_engine
 
 
 def environment() -> dict[str, str]:
@@ -31,3 +32,18 @@ def test_runtime_factory_composes_services_without_connecting_until_health_and_d
 
   assert response.status_code == 503
   assert engine.disposed is True
+
+
+def test_mariadb_engine_configures_utc_for_each_new_connection(monkeypatch) -> None:
+  captured = {}
+
+  def fake_create_async_engine(url, **kwargs):
+    captured["url"] = url
+    captured["kwargs"] = kwargs
+    return object()
+  monkeypatch.setattr("proctoring_api.db.engine.create_async_engine", fake_create_async_engine)
+
+  create_mariadb_engine("mysql://service:password@database.example.edu/proctoring")
+
+  assert captured["url"] == "mysql+asyncmy://service:password@database.example.edu/proctoring"
+  assert captured["kwargs"]["connect_args"]["init_command"] == "SET time_zone = '+00:00'"
