@@ -435,6 +435,52 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.alert-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.alert-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.alert-table th,
+.alert-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 13px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.alert-table th {
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.alert-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.alert-table tbody tr:hover {
+  background: var(--surface-muted);
+}
+
+.alert-table td small,
+.muted-label {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .back-button {
   border: 0;
   margin-bottom: 18px;
@@ -805,6 +851,73 @@ a:focus-visible {
   }
 
   .attempt-table td:last-child::before {
+    display: none;
+  }
+
+  .alert-table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .alert-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .alert-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .alert-table tbody,
+  .alert-table tr,
+  .alert-table td {
+    display: block;
+  }
+
+  .alert-table tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    background: var(--surface);
+  }
+
+  .alert-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 0;
+    padding: 8px 0;
+    text-align: right;
+  }
+
+  .alert-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .alert-table td:first-child {
+    display: block;
+    text-align: left;
+  }
+
+  .alert-table td:first-child::before {
+    display: none;
+  }
+
+  .alert-table td:last-child {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .alert-table td:last-child::before {
     display: none;
   }
 

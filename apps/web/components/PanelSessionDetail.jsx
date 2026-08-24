@@ -21,15 +21,22 @@ export default function PanelSessionDetail({ canManageBiometrics, session, onBac
       ) : null}
       {session.risk ? <BehaviorAnalysis risk={session.risk} /> : null}
       <h3>Alertas</h3>
-      {session.alerts.length === 0 ? <p>Sin alertas.</p> : session.alerts.map((alert) => (
-        <article className="timeline-item" key={alert.id}>
-          <strong>{alertTypeLabel(alert.type)}</strong>
-          <span className={`badge ${alert.severity === 'high' ? 'warning' : ''}`}>{alert.severity}</span>
-          <p>Estado: {reviewStatusLabel(alert.status)}{alert.review_note ? ` · ${alert.review_note}` : ''}</p>
-          {alert.evidenceId ? <button className="text-button evidence-link" type="button" onClick={() => onEvidence(alert.evidenceId)}>Ver imagen de la incidencia</button> : alert.captureStatus === 'unavailable' ? <p>Sin imagen disponible.</p> : <p>Imagen pendiente de guardar.</p>}
-          {alert.status === 'open' ? <div className="button-row"><button className="text-button" type="button" onClick={() => onReview(alert.id, 'reviewed')}>Válida</button><button className="text-button" type="button" onClick={() => onReview(alert.id, 'dismissed')}>Inválida</button></div> : null}
-        </article>
-      ))}
+      {session.alerts.length === 0 ? <p>Sin alertas.</p> : <div className="alert-table-wrap">
+        <table className="alert-table">
+          <thead>
+            <tr><th scope="col">Alerta</th><th scope="col">Severidad</th><th scope="col">Revisión</th><th scope="col">Evidencia</th><th scope="col">Acciones</th></tr>
+          </thead>
+          <tbody>
+            {session.alerts.map((alert) => <tr key={alert.id}>
+              <td data-label="Alerta"><strong>{alertTypeLabel(alert.type)}</strong></td>
+              <td data-label="Severidad"><span className={`badge ${alert.severity === 'high' ? 'warning' : ''}`}>{alert.severity}</span></td>
+              <td data-label="Revisión"><span className="badge">{reviewStatusLabel(alert.status)}</span>{alert.review_note ? <small>{alert.review_note}</small> : null}</td>
+              <td data-label="Evidencia">{alert.evidenceId ? <button className="text-button" type="button" onClick={() => onEvidence(alert.evidenceId)}>Ver imagen de la incidencia</button> : alert.captureStatus === 'unavailable' ? <span className="muted-label">Sin imagen disponible.</span> : <span className="muted-label">Imagen pendiente de guardar.</span>}</td>
+              <td data-label="Acciones">{alert.status === 'open' ? <div className="button-row"><button className="text-button" type="button" onClick={() => onReview(alert.id, 'reviewed')}>Válida</button><button className="text-button" type="button" onClick={() => onReview(alert.id, 'dismissed')}>Inválida</button></div> : <span className="muted-label">Sin acciones</span>}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
       <h3>Imágenes de incidencias</h3>
       {incidentEvidence.length === 0 ? <p>No hay imágenes asociadas a incidencias.</p> : incidentEvidence.map((item) => (
         <button className="text-button evidence-link" type="button" key={item.id} onClick={() => onEvidence(item.id)}>Ver incidencia · {new Date(item.created_at).toLocaleString()}</button>

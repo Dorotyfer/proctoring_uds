@@ -189,6 +189,9 @@ it('shows linked incident evidence with valid and invalid review actions', async
   fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
   fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
 
+  expect(await screen.findByRole('columnheader', { name: 'Alerta' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Severidad' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Revisión' })).toBeInTheDocument();
   expect(await screen.findByRole('button', { name: /Válida/ })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Inválida/ })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Ver imagen de la incidencia/ })).toBeInTheDocument();
