@@ -9,9 +9,12 @@ from proctoring_api.db.migrations import MigrationLockError, MigrationRunner, mi
 def test_migration_files_preserve_all_existing_numbered_migrations() -> None:
   files = migration_files()
   assert [path.name for path in files] == [f"{number:03d}_{name}.sql" for number, name in [
-    (1, "sessions"), (2, "events"), (3, "preparation_alerts"), (4, "evidence_panel"), (5, "panel_course_catalog"), (6, "incident_evidence"), (7, "biometric_profiles"), (8, "session_failure_policy"), (9, "analysis_queue")
+    (1, "sessions"), (2, "events"), (3, "preparation_alerts"), (4, "evidence_panel"), (5, "panel_course_catalog"), (6, "incident_evidence"), (7, "biometric_profiles"), (8, "session_failure_policy"), (9, "analysis_queue"), (10, "worker_monitoring_state")
   ]]
   assert "CREATE TABLE IF NOT EXISTS proctoring_sessions" in files[0].read_text(encoding="utf-8")
+  worker_migration = files[-1].read_text(encoding="utf-8")
+  assert "CREATE TABLE IF NOT EXISTS proctoring_sface_audit" in worker_migration
+  assert "REFERENCES proctoring_sface_profiles" in worker_migration
 
 
 def test_raw_sql_splitter_preserves_semicolons_inside_string_literals() -> None:

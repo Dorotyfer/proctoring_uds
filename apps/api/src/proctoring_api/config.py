@@ -47,6 +47,10 @@ class Settings(BaseModel):
     default=False,
     validation_alias="INFERENCE_REQUESTED"
   )
+  sface_cosine_threshold: float = Field(default=0.593, ge=0, le=2, validation_alias="SFACE_COSINE_THRESHOLD")
+  liveness_center_threshold: float = Field(default=0.15, ge=0, lt=1, validation_alias="LIVENESS_CENTER_THRESHOLD")
+  liveness_turn_threshold: float = Field(default=0.30, gt=0, le=2, validation_alias="LIVENESS_TURN_THRESHOLD")
+  sface_interval_seconds: int = Field(default=60, ge=60, validation_alias="SFACE_INTERVAL_SECONDS")
 
   @classmethod
   def from_environment(cls, environment: Mapping[str, str]) -> "Settings":
@@ -67,6 +71,10 @@ class Settings(BaseModel):
   @property
   def evidence_encryption_key_bytes(self) -> bytes:
     return base64.b64decode(self.evidence_encryption_key, validate=True)
+
+  @property
+  def biometric_encryption_key_bytes(self) -> bytes:
+    return base64.b64decode(self.biometric_encryption_key, validate=True)
 
   @field_validator("evidence_encryption_key", "biometric_encryption_key")
   @classmethod
@@ -93,9 +101,13 @@ class Settings(BaseModel):
       raise ValueError("S3_SERVER_SIDE_ENCRYPTION must be AES256 or none")
     if self.inference_requested:
       try:
-        validate_model_manifest(self.model_manifest_path, require_artifacts=True)
+        manifest = validate_model_manifest(self.model_manifest_path, require_artifacts=True)
       except ManifestValidationError as error:
         raise ValueError(f"model manifest: {error}") from error
+      if manifest.get("releaseReady") is not True:
+        raise ValueError("model manifest must be release-ready before inference")
+    if self.liveness_center_threshold >= self.liveness_turn_threshold:
+      raise ValueError("LIVENESS_CENTER_THRESHOLD must be lower than LIVENESS_TURN_THRESHOLD")
     return self
 
 

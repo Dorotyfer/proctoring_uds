@@ -1,7 +1,8 @@
 {
   "version": 1,
   "offlineOnly": true,
-  "weightsDirectory": "/opt/proctoring/model-weights",
+  "releaseReady": false,
+  "weightsDirectory": "/opt/proctoring/.deepface/weights",
   "models": [
     {
       "id": "opencv-face-detection-yunet-2023mar",
@@ -18,9 +19,16 @@
       "status": "unacquired-release-blocking"
     },
     {
-      "id": "deepface-fasnet",
-      "destination": "Fasnet.pth",
-      "source": "https://github.com/serengil/deepface",
+      "id": "deepface-fasnet-v2",
+      "destination": "2.7_80x80_MiniFASNetV2.pth",
+      "source": "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/raw/master/resources/anti_spoof_models/2.7_80x80_MiniFASNetV2.pth",
+      "sha256": null,
+      "status": "unacquired-release-blocking"
+    },
+    {
+      "id": "deepface-fasnet-v1se",
+      "destination": "4_0_0_80x80_MiniFASNetV1SE.pth",
+      "source": "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/raw/master/resources/anti_spoof_models/4_0_0_80x80_MiniFASNetV1SE.pth",
       "sha256": null,
       "status": "unacquired-release-blocking"
     },

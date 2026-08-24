@@ -90,6 +90,44 @@ class SqlAnalysisRepository:
       """), {"session_id": session_id, "analysis_id": analysis_id})
       return {row["object_key"] for row in result.mappings().all()}
 
+  async def frames_for_job(self, job_id: str) -> list[dict[str, Any]]:
+    async with self._engine.connect() as connection:
+      result = await connection.execute(text("""
+        SELECT id, frame_order, object_key, encryption_iv, encryption_tag, sha256,
+          byte_size, width, height, cleanup_state
+        FROM proctoring_analysis_frames WHERE job_id = :job_id ORDER BY frame_order
+      """), {"job_id": job_id})
+      return [{
+        "id": str(row["id"]), "frameOrder": int(row["frame_order"]), "objectKey": row["object_key"],
+        "encryptionIv": bytes(row["encryption_iv"]), "encryptionTag": bytes(row["encryption_tag"]),
+        "sha256": row["sha256"], "byteSize": int(row["byte_size"]), "width": int(row["width"]),
+        "height": int(row["height"]), "cleanupState": row["cleanup_state"],
+      } for row in result.mappings().all()]
+
+  async def context_for_job(self, job_id: str) -> dict[str, Any]:
+    async with self._engine.connect() as connection:
+      result = await connection.execute(text("""
+        SELECT jobs.id, sessions.moodle_user_id, sessions.failure_policy, challenges.steps,
+          COALESCE(MAX(profiles.enrollment_version), 0) AS previous_enrollment_version
+        FROM proctoring_analysis_jobs jobs
+        JOIN proctoring_sessions sessions ON sessions.id = jobs.session_id
+        LEFT JOIN proctoring_liveness_challenges challenges ON challenges.id = jobs.challenge_id
+        LEFT JOIN proctoring_sface_profiles profiles ON profiles.moodle_user_id = sessions.moodle_user_id
+        WHERE jobs.id = :job_id
+        GROUP BY jobs.id, sessions.moodle_user_id, sessions.failure_policy, challenges.steps
+      """), {"job_id": job_id})
+      row = result.mappings().first()
+      if not row:
+        raise RuntimeError("Analysis context unavailable")
+      steps = row.get("steps")
+      if isinstance(steps, str):
+        steps = json.loads(steps)
+      return {
+        "moodleUserId": row["moodle_user_id"], "failurePolicy": row["failure_policy"],
+        "challengeSteps": steps, "consentVersion": "biometric-v2",
+        "previousEnrollmentVersion": int(row["previous_enrollment_version"]),
+      }
+
   async def referenced_staging_keys(self, keys: list[str]) -> set[str]:
     if not keys: return set()
     async with self._engine.connect() as connection:
@@ -201,10 +239,10 @@ class SqlAnalysisRepository:
     job_id = str(uuid4())
     try:
       await connection.execute(text("""
-        INSERT INTO proctoring_analysis_jobs (id, analysis_id, session_id, type, available_at)
-        VALUES (:id, :analysis_id, :session_id, :type, :available_at)
+        INSERT INTO proctoring_analysis_jobs (id, analysis_id, session_id, type, available_at, challenge_id)
+        VALUES (:id, :analysis_id, :session_id, :type, :available_at, :challenge_id)
       """), {"id": job_id, "analysis_id": input_data["analysisId"], "session_id": input_data["sessionId"],
-        "type": input_data["type"], "available_at": input_data["now"]})
+        "type": input_data["type"], "available_at": input_data["now"], "challenge_id": input_data.get("challengeId")})
     except IntegrityError:
       duplicate = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
       if duplicate:
@@ -260,13 +298,13 @@ def _safe_result(value: dict[str, Any]) -> dict[str, Any]:
     raise ValueError("Invalid analysis result")
   keys = set(value)
   preparation = {"liveness", "identity", "profileVersion", "technicalAlert", "reasonCode"}
-  monitoring = {"face", "alert", "events", "technicalAlert"}
+  monitoring = {"face", "alert", "events", "technicalAlert", "followUpFrames", "followUpIntervalSeconds"}
   if {"liveness", "identity", "profileVersion"}.issubset(keys) and keys <= preparation:
     profile = value["profileVersion"]
     if value["liveness"] in {"passed", "failed", "unavailable"} and value["identity"] in {"enrolled", "matched", "mismatch", "unavailable"} and (profile is None or type(profile) is int and 1 <= profile <= 2**31 - 1) and ("technicalAlert" not in value or isinstance(value["technicalAlert"], bool)) and ("reasonCode" not in value or value["reasonCode"] in {"camera", "model", "network"}):
       return {key: value[key] for key in keys}
   if {"face", "alert"}.issubset(keys) and keys <= monitoring:
     events = value.get("events", [])
-    if value["face"] in {"present", "absent", "multiple"} and isinstance(value["alert"], bool) and isinstance(events, list) and len(events) <= 3 and all(item in {"biometric_monitor_mismatch", "environment_intrusion", "analysis_unavailable"} for item in events) and ("technicalAlert" not in value or isinstance(value["technicalAlert"], bool)):
+    if value["face"] in {"present", "absent", "multiple"} and isinstance(value["alert"], bool) and isinstance(events, list) and len(events) <= 3 and all(item in {"biometric_monitor_mismatch", "environment_intrusion", "analysis_unavailable"} for item in events) and ("technicalAlert" not in value or isinstance(value["technicalAlert"], bool)) and ("followUpFrames" not in value or value["followUpFrames"] == 2) and ("followUpIntervalSeconds" not in value or value["followUpIntervalSeconds"] == 2):
       return {key: value[key] for key in keys}
   raise ValueError("Invalid analysis result")

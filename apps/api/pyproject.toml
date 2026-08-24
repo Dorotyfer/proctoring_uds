@@ -26,6 +26,9 @@ proctoring-migrate = "proctoring_api.db.migrations:main"
 proctoring-api = "proctoring_api.main:main"
 proctoring-check-infra = "proctoring_api.cli:check_infrastructure_main"
 proctoring-purge = "proctoring_api.cli:purge_main"
+proctoring-worker = "proctoring_api.worker_main:main"
+proctoring-models = "proctoring_api.models_cli:main"
+proctoring-benchmark = "proctoring_api.benchmark:main"
 
 [project.optional-dependencies]
 test = [
@@ -33,15 +36,19 @@ test = [
   "pytest==8.3.5"
 ]
 vision = [
-  "deepface==0.0.93",
-  "torch==2.6.0",
-  "torchvision==0.21.0"
+  "deepface==0.0.100",
+  "torch==2.13.0",
+  "torchvision==0.28.0",
+  "opencv-contrib-python-headless==4.14.0.94"
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["integration: requires TEST_DATABASE_URL and S3 test settings"]
+markers = [
+  "integration: requires TEST_DATABASE_URL and S3 test settings",
+  "inference: requires a release-ready manifest and approved local model weights"
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

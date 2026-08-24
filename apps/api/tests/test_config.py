@@ -55,6 +55,21 @@ def test_settings_normalize_public_and_storage_urls() -> None:
   assert settings.s3_endpoint == "https://s3.example.edu"
   assert settings.failure_policy.value == "block"
   assert settings.model_manifest_path == Path("/etc/proctoring/model-weights.json")
+  assert settings.sface_cosine_threshold == 0.593
+  assert settings.liveness_center_threshold == 0.15
+  assert settings.liveness_turn_threshold == 0.30
+  assert settings.sface_interval_seconds == 60
+
+
+def test_settings_validate_directional_liveness_threshold_order_and_minimum_sface_cadence() -> None:
+  environment = valid_environment()
+  environment.update({
+    "LIVENESS_CENTER_THRESHOLD": "0.4", "LIVENESS_TURN_THRESHOLD": "0.3",
+    "SFACE_INTERVAL_SECONDS": "59"
+  })
+
+  with pytest.raises(ValidationError):
+    Settings.from_environment(environment)
 
 
 @pytest.mark.parametrize(("origin", "expected"), [
@@ -136,6 +151,7 @@ def test_settings_require_approved_local_weights_when_inference_is_requested(tmp
   manifest_path.write_text(json.dumps({
     "version": 1,
     "offlineOnly": True,
+    "releaseReady": True,
     "weightsDirectory": str(weights_directory),
     "models": [{
       "id": "approved-model",
@@ -148,3 +164,20 @@ def test_settings_require_approved_local_weights_when_inference_is_requested(tmp
   settings = Settings.from_environment(environment)
 
   assert settings.model_manifest_path == manifest_path
+
+
+def test_settings_reject_release_blocked_model_manifest_even_when_placeholder_files_match(tmp_path: Path) -> None:
+  environment = valid_environment()
+  environment["INFERENCE_REQUESTED"] = "true"
+  environment["MODEL_MANIFEST_PATH"] = str(tmp_path / "model-weights.json")
+  weights = tmp_path / "weights"
+  weights.mkdir()
+  (weights / "model.onnx").write_bytes(b"local")
+  (tmp_path / "model-weights.json").write_text(json.dumps({
+    "version": 1, "offlineOnly": True, "releaseReady": False,
+    "weightsDirectory": str(weights),
+    "models": [{"id": "model", "destination": "model.onnx", "sha256": hashlib.sha256(b"local").hexdigest(), "status": "approved"}]
+  }), encoding="utf-8")
+
+  with pytest.raises(ValidationError, match="release-ready"):
+    Settings.from_environment(environment)
