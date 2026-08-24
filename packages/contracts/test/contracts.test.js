@@ -18,8 +18,10 @@ const validSession = {
 };
 
 test('accepts the supported device modes', () => {
+  assert.equal(CreateSessionInput.parse(validSession).controlLevel, 'medium');
   assert.equal(CreateSessionInput.parse(validSession).deviceMode, 'browser');
   assert.equal(CreateSessionInput.parse({ ...validSession, deviceMode: 'seb' }).deviceMode, 'seb');
+  assert.equal(CreateSessionInput.parse({ ...validSession, controlLevel: 'high' }).controlLevel, 'high');
 });
 
 test('rejects unsupported modes and invalid session durations', () => {

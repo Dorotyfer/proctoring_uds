@@ -59,6 +59,14 @@ class quizaccess_proctoring extends quiz_access_rule_base {
         ]);
         $mform->setDefault('proctoringfailurepolicy', 'block');
         $mform->hideIf('proctoringfailurepolicy', 'proctoringenabled', 'eq', 0);
+
+        $mform->addElement('select', 'proctoringcontrollevel', get_string('controllevel', 'quizaccess_proctoring'), [
+            'low' => get_string('controllevellow', 'quizaccess_proctoring'),
+            'medium' => get_string('controllevelmedium', 'quizaccess_proctoring'),
+            'high' => get_string('controllevelhigh', 'quizaccess_proctoring')
+        ]);
+        $mform->setDefault('proctoringcontrollevel', 'medium');
+        $mform->hideIf('proctoringcontrollevel', 'proctoringenabled', 'eq', 0);
     }
 
     public static function save_settings($quiz) {
@@ -68,7 +76,10 @@ class quizaccess_proctoring extends quiz_access_rule_base {
             'quizid' => $quiz->id,
             'enabled' => empty($quiz->proctoringenabled) ? 0 : 1,
             'allowedmode' => $quiz->proctoringallowedmode ?? 'either',
-            'failurepolicy' => $quiz->proctoringfailurepolicy ?? 'block'
+            'failurepolicy' => $quiz->proctoringfailurepolicy ?? 'block',
+            'controllevel' => in_array($quiz->proctoringcontrollevel ?? 'medium', ['low', 'medium', 'high'], true)
+                ? $quiz->proctoringcontrollevel
+                : 'medium'
         ];
         $existing = $DB->get_record('quizaccess_proctoring', ['quizid' => $quiz->id]);
 

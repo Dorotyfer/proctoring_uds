@@ -69,6 +69,25 @@ class rule_test extends \advanced_testcase {
         $this->assertSame('browser', $this->resolve_device_mode($settings));
     }
 
+    public function test_saves_the_control_level_for_a_quiz(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->get_plugin_generator('mod_quiz')->create_instance([
+            'course' => $course->id
+        ]);
+        $quiz->proctoringenabled = 1;
+        $quiz->proctoringallowedmode = 'either';
+        $quiz->proctoringfailurepolicy = 'block';
+        $quiz->proctoringcontrollevel = 'high';
+
+        \quizaccess_proctoring::save_settings($quiz);
+
+        $settings = $DB->get_record('quizaccess_proctoring', ['quizid' => $quiz->id], '*', MUST_EXIST);
+        $this->assertSame('high', $settings->controllevel);
+    }
+
     private function resolve_device_mode(\stdClass $settings): string {
         $method = new \ReflectionMethod(observer::class, 'resolve_device_mode');
         return $method->invoke(null, $settings);

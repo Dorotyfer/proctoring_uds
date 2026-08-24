@@ -29,6 +29,10 @@ class session_manager {
         $expiresat = $attempt->proctoringexpiresat ?? ($issuedat + (6 * HOURSECS));
         $course = $DB->get_record('course', ['id' => $attempt->courseid], 'id, fullname', MUST_EXIST);
         $quiz = $DB->get_record('quiz', ['id' => $attempt->quiz], 'id, name', MUST_EXIST);
+        $policy = $DB->get_record('quizaccess_proctoring', ['quizid' => $quiz->id], 'controllevel');
+        $controllevel = $policy && in_array($policy->controllevel, ['low', 'medium', 'high'], true)
+            ? $policy->controllevel
+            : 'medium';
         $student = $DB->get_record(
             'user',
             ['id' => $attempt->userid],
@@ -46,6 +50,7 @@ class session_manager {
             'studentName' => fullname($student),
             'studentDocument' => $studentdocument === '' ? null : $studentdocument,
             'deviceMode' => $devicemode,
+            'controlLevel' => $controllevel,
             'issuedAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $issuedat),
             'expiresAt' => gmdate('Y-m-d\\TH:i:s.000\\Z', $expiresat)
         ];
