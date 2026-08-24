@@ -9,6 +9,35 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+
+class UploadBodyLimitMiddleware:
+  """Pure ASGI guard that runs before Starlette's multipart parser."""
+  def __init__(self, app, preparation_limit: int = 3 * 200 * 1024 + 16 * 1024, monitoring_limit: int = 200 * 1024 + 8 * 1024):
+    self.app, self.preparation_limit, self.monitoring_limit = app, preparation_limit, monitoring_limit
+  async def __call__(self, scope, receive, send):
+    path = scope.get("path", "")
+    limit = self.preparation_limit if path.endswith("/preparation-analyses") else self.monitoring_limit if path.endswith("/monitoring-frames") else None
+    if scope.get("type") != "http" or scope.get("method") != "POST" or limit is None:
+      return await self.app(scope, receive, send)
+    headers = dict(scope.get("headers", []))
+    try: known = int(headers.get(b"content-length", b"0"))
+    except ValueError: known = 0
+    if known > limit: return await _payload_too_large(send)
+    consumed = 0
+    async def bounded_receive():
+      nonlocal consumed
+      message = await receive()
+      if message.get("type") == "http.request":
+        consumed += len(message.get("body", b""))
+        if consumed > limit: return {"type": "http.disconnect"}
+      return message
+    return await self.app(scope, bounded_receive, send)
+
+
+async def _payload_too_large(send):
+  await send({"type": "http.response.start", "status": 413, "headers": [(b"content-type", b"application/json")]})
+  await send({"type": "http.response.body", "body": b'{"error":"Upload too large"}'})
+
 from proctoring_api.auth import (
   issue_browser_token,
   require_browser_claims,
@@ -52,6 +81,7 @@ def create_app(
   """Build an HTTP-only application without loading runtime configuration or models."""
 
   app = FastAPI()
+  app.add_middleware(UploadBodyLimitMiddleware)
   app.state.health_service = health_service
   app.state.readiness_service = readiness_service
   # Task 4 consumes these for panel evidence routes; Task 5 consumes them for

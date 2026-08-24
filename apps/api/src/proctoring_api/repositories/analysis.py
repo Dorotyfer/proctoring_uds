@@ -55,28 +55,46 @@ class SqlAnalysisRepository:
       raise AmbiguousEnqueueError("Analysis enqueue acknowledgement unavailable") from error
 
   async def consume_challenge_and_enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    async with self._engine.begin() as connection:
-      await self._lock_session(connection, input_data["sessionId"])
-      await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
-      existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
-      if existing:
-        return _job(existing), False
-      challenge = await connection.execute(text("""
+    try:
+      async with self._engine.begin() as connection:
+        await self._lock_session(connection, input_data["sessionId"])
+        await self._expire_stale_monitoring(connection, input_data["sessionId"], input_data["now"])
+        existing = await self._find_for_update(connection, input_data["sessionId"], input_data["analysisId"])
+        if existing:
+          return _job(existing), False
+        challenge = await connection.execute(text("""
         SELECT id, session_id, expires_at, used_at FROM proctoring_liveness_challenges
         WHERE id = :id AND session_id = :session_id FOR UPDATE
-      """), {"id": input_data["challengeId"], "session_id": input_data["sessionId"]})
-      row = challenge.mappings().first()
-      if not row or row["used_at"] is not None or row["expires_at"].replace(tzinfo=UTC) <= input_data["now"]:
-        raise ChallengeExpiredError("Challenge is used or expired")
-      await self._check_capacity(connection, input_data["sessionId"], "preparation", input_data["now"])
-      job, created = await self._insert_job(connection, input_data)
-      if not created:
-        return job, False
-      await connection.execute(text("""
+        """), {"id": input_data["challengeId"], "session_id": input_data["sessionId"]})
+        row = challenge.mappings().first()
+        if not row or row["used_at"] is not None or row["expires_at"].replace(tzinfo=UTC) <= input_data["now"]:
+          raise ChallengeExpiredError("Challenge is used or expired")
+        await self._check_capacity(connection, input_data["sessionId"], "preparation", input_data["now"])
+        job, created = await self._insert_job(connection, input_data)
+        if not created:
+          return job, False
+        await connection.execute(text("""
         UPDATE proctoring_liveness_challenges SET used_at = :now
         WHERE id = :id AND used_at IS NULL
-      """), {"id": input_data["challengeId"], "now": input_data["now"]})
-      return job, True
+        """), {"id": input_data["challengeId"], "now": input_data["now"]})
+        return job, True
+    except DBAPIError as error:
+      raise AmbiguousEnqueueError("Analysis enqueue acknowledgement unavailable") from error
+
+  async def job_frame_keys(self, session_id: str, analysis_id: str) -> set[str]:
+    async with self._engine.connect() as connection:
+      result = await connection.execute(text("""
+        SELECT frames.object_key FROM proctoring_analysis_frames frames
+        JOIN proctoring_analysis_jobs jobs ON jobs.id = frames.job_id
+        WHERE jobs.session_id = :session_id AND jobs.analysis_id = :analysis_id
+      """), {"session_id": session_id, "analysis_id": analysis_id})
+      return {row["object_key"] for row in result.mappings().all()}
+
+  async def referenced_staging_keys(self, keys: list[str]) -> set[str]:
+    if not keys: return set()
+    async with self._engine.connect() as connection:
+      result = await connection.execute(text("SELECT object_key FROM proctoring_analysis_frames WHERE object_key IN :keys").bindparams(keys=tuple(keys)))
+      return {row["object_key"] for row in result.mappings().all()}
 
   async def claim(self, owner_token: str, now: datetime | None = None) -> dict[str, Any] | None:
     now = now or datetime.now(UTC)
@@ -241,10 +259,14 @@ def _safe_result(value: dict[str, Any]) -> dict[str, Any]:
   if not isinstance(value, dict):
     raise ValueError("Invalid analysis result")
   keys = set(value)
-  preparation = {"liveness", "identity", "profileVersion"}
-  monitoring = {"face", "alert"}
-  if keys == preparation and isinstance(value["liveness"], str) and isinstance(value["identity"], str) and isinstance(value["profileVersion"], int):
-    return {"liveness": value["liveness"], "identity": value["identity"], "profileVersion": value["profileVersion"]}
-  if keys == monitoring and value["face"] in {"present", "absent", "multiple"} and isinstance(value["alert"], bool):
-    return {"face": value["face"], "alert": value["alert"]}
+  preparation = {"liveness", "identity", "profileVersion", "technicalAlert", "reasonCode"}
+  monitoring = {"face", "alert", "events", "technicalAlert"}
+  if {"liveness", "identity", "profileVersion"}.issubset(keys) and keys <= preparation:
+    profile = value["profileVersion"]
+    if value["liveness"] in {"passed", "failed", "unavailable"} and value["identity"] in {"enrolled", "matched", "mismatch", "unavailable"} and (profile is None or type(profile) is int and 1 <= profile <= 2**31 - 1) and ("technicalAlert" not in value or isinstance(value["technicalAlert"], bool)) and ("reasonCode" not in value or value["reasonCode"] in {"camera", "model", "network"}):
+      return {key: value[key] for key in keys}
+  if {"face", "alert"}.issubset(keys) and keys <= monitoring:
+    events = value.get("events", [])
+    if value["face"] in {"present", "absent", "multiple"} and isinstance(value["alert"], bool) and isinstance(events, list) and len(events) <= 3 and all(item in {"biometric_monitor_mismatch", "environment_intrusion", "analysis_unavailable"} for item in events) and ("technicalAlert" not in value or isinstance(value["technicalAlert"], bool)):
+      return {key: value[key] for key in keys}
   raise ValueError("Invalid analysis result")

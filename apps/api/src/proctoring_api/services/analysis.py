@@ -56,11 +56,14 @@ class AnalysisRepository(Protocol):
   async def enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]: ...
   async def consume_challenge_and_enqueue(self, input_data: dict[str, Any]) -> tuple[dict[str, Any], bool]: ...
   async def monitoring_status(self, session_id: str, now: datetime) -> dict[str, Any]: ...
+  async def job_frame_keys(self, session_id: str, analysis_id: str) -> set[str]: ...
+  async def referenced_staging_keys(self, keys: list[str]) -> set[str]: ...
 
 
 class EncryptedObjectStorage(Protocol):
   async def put(self, key: str, body: bytes, content_type: str) -> None: ...
   async def delete(self, key: str) -> None: ...
+  async def list_prefix(self, prefix: str) -> list[dict[str, Any]]: ...
 
 
 def validate_jpeg(data: bytes, content_type: str | None) -> ValidatedJpeg:
@@ -219,11 +222,22 @@ class AnalysisQueueService:
     """Resolve acknowledged-late commits without deleting possible canonical frame objects."""
     canonical = await self._repository.get_job(session_id, analysis_id)
     if canonical:
-      # A committed transaction may reference these keys even when its acknowledgement was lost.
-      # Retention cleanup discovers the staging prefix later rather than risking canonical data.
+      keys = await self._repository.job_frame_keys(session_id, analysis_id)
+      await self._delete_uploads([upload for upload in uploads if upload["objectKey"] not in keys])
       return canonical
     await self._delete_uploads(uploads)
     raise RuntimeError("Analysis enqueue unavailable")
+
+  async def purge_orphan_staging(self, before: datetime) -> int:
+    objects = await self._storage.list_prefix("staging/")
+    aged = [item for item in objects if item.get("lastModified") and item["lastModified"] < before]
+    referenced = await self._repository.referenced_staging_keys([item["key"] for item in aged])
+    deleted = 0
+    for item in aged:
+      if item["key"] not in referenced:
+        await self._storage.delete(item["key"])
+        deleted += 1
+    return deleted
 
 
 class StagingCleanupError(RuntimeError):

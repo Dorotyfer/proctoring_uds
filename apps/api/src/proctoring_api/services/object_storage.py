@@ -93,6 +93,23 @@ class S3ObjectStorage:
     _validate_key(key)
     await self._run("delete_object", {"Bucket": self._bucket, "Key": key})
 
+  async def list_prefix(self, prefix: str) -> list[dict[str, Any]]:
+    if prefix != "staging/":
+      raise StorageValidationError("Invalid evidence object key")
+    items: list[dict[str, Any]] = []
+    token: str | None = None
+    while True:
+      request = {"Bucket": self._bucket, "Prefix": prefix}
+      if token: request["ContinuationToken"] = token
+      page = await self._run("list_objects_v2", request)
+      for item in page.get("Contents", []):
+        key, modified = item.get("Key"), item.get("LastModified")
+        if isinstance(key, str) and key.startswith(prefix) and key.endswith(".enc") and modified:
+          items.append({"key": key, "lastModified": modified})
+      if not page.get("IsTruncated"): return items
+      token = page.get("NextContinuationToken")
+      if not isinstance(token, str): raise ObjectStorageError("Evidence storage unavailable")
+
   async def close(self) -> None:
     close = getattr(self._client, "close", None)
     if callable(close):
