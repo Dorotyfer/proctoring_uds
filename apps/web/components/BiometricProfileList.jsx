@@ -27,11 +27,13 @@ export default function BiometricProfileList({ profiles, filters, loading, pagin
         <div className="profile-table-wrap">
           <table className="profile-table">
             <thead>
-              <tr><th>Usuario Moodle</th><th>Estado</th><th>Versión</th><th>Registrado</th><th>Última verificación</th><th>Acción</th></tr>
+              <tr><th>Nombre</th><th>CI</th><th>Usuario Moodle</th><th>Estado</th><th>Versión</th><th>Registrado</th><th>Última verificación</th><th>Acción</th></tr>
             </thead>
             <tbody>
               {profiles.map((profile) => (
                 <tr key={profile.moodleUserId}>
+                  <td>{profile.studentName || 'No informado'}</td>
+                  <td>{profile.studentDocument || 'No informado'}</td>
                   <td>{profile.moodleUserId}</td>
                   <td><span className={profile.status === 'active' ? 'badge' : 'badge warning'}>{profile.status === 'active' ? 'Registrado' : 'Revocado'}</span></td>
                   <td>{profile.enrollmentVersion}</td>

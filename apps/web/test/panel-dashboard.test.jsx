@@ -58,7 +58,9 @@ it('opens the biometric profiles section for institutional users', async () => {
         lastVerifiedAt: null,
         moodleUserId: 'student-1',
         revokedAt: null,
-        status: 'active'
+        status: 'active',
+        studentDocument: '1234567',
+        studentName: 'Ana Pérez'
       }],
       page: 1,
       pageSize: 25,
@@ -72,6 +74,8 @@ it('opens the biometric profiles section for institutional users', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Perfiles biométricos' }));
 
   expect(await screen.findByText('student-1')).toBeInTheDocument();
+  expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
+  expect(screen.getByText('1234567')).toBeInTheDocument();
   expect(screen.getAllByText('Registrado').length).toBe(2);
 });
 

@@ -220,7 +220,9 @@ test('lists biometric profiles only for institutional managers', async () => {
             lastVerifiedAt: null,
             moodleUserId: 'student-1',
             revokedAt: null,
-            status: 'active'
+            status: 'active',
+            studentDocument: '1234567',
+            studentName: 'Ana Pérez'
           }],
           page: 2,
           pageSize: 10,
@@ -253,7 +255,9 @@ test('lists biometric profiles only for institutional managers', async () => {
     lastVerifiedAt: null,
     moodleUserId: 'student-1',
     revokedAt: null,
-    status: 'active'
+    status: 'active',
+    studentDocument: '1234567',
+    studentName: 'Ana Pérez'
   });
   await app.close();
 });

@@ -22,11 +22,29 @@ export function createBiometricProfileRepository(databaseUrl) {
         ${whereSql}
       `, values);
       const [rows] = await pool.execute(`
-        SELECT moodle_user_id, enrollment_version, status,
-          enrolled_at, last_verified_at, revoked_at
-        FROM proctoring_biometric_profiles
+        SELECT profiles.moodle_user_id, profiles.enrollment_version, profiles.status,
+          profiles.enrolled_at, profiles.last_verified_at, profiles.revoked_at,
+          (
+            SELECT sessions.student_name
+            FROM proctoring_sessions sessions
+            WHERE sessions.moodle_user_id = profiles.moodle_user_id
+              AND sessions.student_name IS NOT NULL
+              AND sessions.student_name <> ''
+            ORDER BY sessions.created_at DESC
+            LIMIT 1
+          ) AS student_name,
+          (
+            SELECT sessions.student_document
+            FROM proctoring_sessions sessions
+            WHERE sessions.moodle_user_id = profiles.moodle_user_id
+              AND sessions.student_document IS NOT NULL
+              AND sessions.student_document <> ''
+            ORDER BY sessions.created_at DESC
+            LIMIT 1
+          ) AS student_document
+        FROM proctoring_biometric_profiles profiles
         ${whereSql}
-        ORDER BY enrolled_at DESC, moodle_user_id
+        ORDER BY profiles.enrolled_at DESC, profiles.moodle_user_id
         LIMIT ? OFFSET ?
       `, [...values, query.pageSize, offset(query)]);
       const total = Number(countRows[0]?.total ?? 0);
@@ -284,7 +302,9 @@ function mapProfileSummary(row) {
     lastVerifiedAt: row.last_verified_at ? toIsoDate(row.last_verified_at) : null,
     moodleUserId: row.moodle_user_id,
     revokedAt: row.revoked_at ? toIsoDate(row.revoked_at) : null,
-    status: row.status
+    status: row.status,
+    studentDocument: row.student_document ?? null,
+    studentName: row.student_name ?? null
   };
 }
 
