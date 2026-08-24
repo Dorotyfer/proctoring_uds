@@ -59,7 +59,8 @@ export function createPanelAuthService(secret) {
       return claims.capabilities.includes(PANEL_CAPABILITIES.viewEvidence);
     },
     canManageBiometrics(claims) {
-      return claims.capabilities.includes(PANEL_CAPABILITIES.managePolicies);
+      return claims.capabilities.includes(PANEL_CAPABILITIES.managePolicies) ||
+        claims.capabilities.includes(PANEL_CAPABILITIES.institution);
     }
   };
 }

@@ -31,6 +31,7 @@ export function createPanelApi(apiUrl) {
       `/v1/panel/biometric-profiles/${encodeURIComponent(moodleUserId)}/reset`,
       { method: 'POST' }
     ),
+    listBiometricProfiles: (filters) => request(`/v1/panel/biometric-profiles?${queryString(filters)}`),
     accessEvidence: (evidenceId) => request(`/v1/panel/evidence/${encodeURIComponent(evidenceId)}/access`, {
       method: 'POST'
     }),

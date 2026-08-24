@@ -47,6 +47,34 @@ it('paginates the course catalog for institutional users', async () => {
   expect(await screen.findByRole('button', { name: /Medicina/ })).toBeInTheDocument();
 });
 
+it('opens the biometric profiles section for institutional users', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [], total: 0, totalPages: 0 }),
+    response({
+      profiles: [{
+        enrolledAt: '2026-08-24T12:00:00.000Z',
+        enrollmentVersion: 2,
+        lastVerifiedAt: null,
+        moodleUserId: 'student-1',
+        revokedAt: null,
+        status: 'active'
+      }],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Perfiles biométricos' }));
+
+  expect(await screen.findByText('student-1')).toBeInTheDocument();
+  expect(screen.getAllByText('Registrado').length).toBe(2);
+});
+
 it('navigates from a course to attempts and shows the full document only in detail', async () => {
   const requests = [
     response({ user: profile }),

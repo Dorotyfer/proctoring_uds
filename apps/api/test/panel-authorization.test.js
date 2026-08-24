@@ -207,6 +207,57 @@ test('allows only institutional managers to require biometric re-enrollment', as
   await app.close();
 });
 
+test('lists biometric profiles only for institutional managers', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    biometricProfileRepository: {
+      async list(query) {
+        received.push(query);
+        return {
+          profiles: [{
+            enrolledAt: '2026-08-24T12:00:00.000Z',
+            enrollmentVersion: 2,
+            lastVerifiedAt: null,
+            moodleUserId: 'student-1',
+            revokedAt: null,
+            status: 'active'
+          }],
+          page: 2,
+          pageSize: 10,
+          total: 11,
+          totalPages: 2
+        };
+      }
+    }
+  });
+  const managerCookie = await signInPanel(app, [PANEL_CAPABILITIES.institution]);
+  const teacherCookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+
+  const managerResponse = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/biometric-profiles?query=student&page=2&pageSize=10',
+    headers: { cookie: managerCookie }
+  });
+  const teacherResponse = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/biometric-profiles',
+    headers: { cookie: teacherCookie }
+  });
+
+  assert.equal(managerResponse.statusCode, 200);
+  assert.equal(teacherResponse.statusCode, 403);
+  assert.deepEqual(received, [{ page: 2, pageSize: 10, query: 'student' }]);
+  assert.deepEqual(managerResponse.json().profiles[0], {
+    enrolledAt: '2026-08-24T12:00:00.000Z',
+    enrollmentVersion: 2,
+    lastVerifiedAt: null,
+    moodleUserId: 'student-1',
+    revokedAt: null,
+    status: 'active'
+  });
+  await app.close();
+});
+
 test('returns only alert evidence in an authorized session detail', async () => {
   const app = await buildPanelApp({
     repository: {

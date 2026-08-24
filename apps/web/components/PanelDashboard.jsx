@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { createPanelApi } from '../lib/panel-api.js';
 import AttemptList from './AttemptList.jsx';
+import BiometricProfileList from './BiometricProfileList.jsx';
 import CourseList from './CourseList.jsx';
 import PanelSessionDetail from './PanelSessionDetail.jsx';
 
 const initialCourseFilters = { page: 1, pageSize: 25, query: '' };
 const initialAttemptFilters = { alerts: 'all', dateFrom: '', dateTo: '', page: 1, pageSize: 25, query: '', status: 'all' };
+const initialBiometricFilters = { page: 1, pageSize: 25, query: '' };
 
 export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   const api = useMemo(() => createPanelApi(apiUrl), [apiUrl]);
@@ -23,6 +25,10 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   const [attemptFilters, setAttemptFilters] = useState(initialAttemptFilters);
   const [coursePagination, setCoursePagination] = useState({ total: 0, totalPages: 0 });
   const [attemptPagination, setAttemptPagination] = useState({ total: 0, totalPages: 0 });
+  const [biometricProfiles, setBiometricProfiles] = useState([]);
+  const [biometricFilters, setBiometricFilters] = useState(initialBiometricFilters);
+  const [biometricPagination, setBiometricPagination] = useState({ total: 0, totalPages: 0 });
+  const [showBiometricProfiles, setShowBiometricProfiles] = useState(false);
 
   const loadCourses = useCallback(async (filters = courseFilters) => {
     setContentStatus('loading');
@@ -51,6 +57,18 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     }
   }, [api, attemptFilters, selectedCourse]);
 
+  const loadBiometricProfiles = useCallback(async (filters = biometricFilters) => {
+    setContentStatus('loading');
+    try {
+      const payload = await api.listBiometricProfiles(filters);
+      setBiometricProfiles(payload.profiles);
+      setBiometricPagination(payload);
+      setContentStatus('ready');
+    } catch (error) {
+      handleRequestError(error, setAuthStatus, setContentStatus);
+    }
+  }, [api, biometricFilters]);
+
   useEffect(() => {
     let active = true;
     async function initialize() {
@@ -74,9 +92,35 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   }, [api]);
 
   async function openCourse(course) {
+    setShowBiometricProfiles(false);
     setSelectedCourse(course);
     setSelectedSession(null);
     await loadSessions(course, attemptFilters);
+  }
+
+  async function openBiometricProfiles() {
+    setShowBiometricProfiles(true);
+    setSelectedCourse(null);
+    setSelectedSession(null);
+    setBiometricFilters(initialBiometricFilters);
+    await loadBiometricProfiles(initialBiometricFilters);
+  }
+
+  async function changeBiometricFilters(filters) {
+    setBiometricFilters(filters);
+    await loadBiometricProfiles(filters);
+  }
+
+  async function resetListedBiometricProfile(moodleUserId) {
+    if (!window.confirm('¿Revocar este perfil y exigir un nuevo registro biométrico?')) {
+      return;
+    }
+    try {
+      await api.resetBiometricProfile(moodleUserId);
+      await loadBiometricProfiles();
+    } catch (error) {
+      handleRequestError(error, setAuthStatus, setContentStatus);
+    }
   }
 
   async function openSession(sessionId) {
@@ -149,12 +193,13 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     <div className="panel-app">
       <header className="panel-userbar">
         <div><strong>{profile.displayName}</strong><span>{profile.scope === 'institutional' ? 'Acceso institucional' : 'Acceso a cursos asignados'}</span></div>
-        <button className="text-button" type="button" onClick={logout}>Cerrar sesión</button>
+        <div className="button-row"><button className="text-button" type="button" onClick={logout}>Cerrar sesión</button>{profile.scope === 'institutional' ? <button className="button" type="button" onClick={openBiometricProfiles}>Perfiles biométricos</button> : null}</div>
       </header>
       {contentStatus === 'error' ? <section className="panel-message error-text"><p>No fue posible cargar esta información.</p><button className="text-button" type="button" onClick={() => selectedCourse ? loadSessions() : loadCourses()}>Reintentar</button></section> : null}
-      {contentStatus !== 'error' && selectedSession ? <PanelSessionDetail canManageBiometrics={profile.scope === 'institutional'} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onResetBiometrics={resetBiometrics} onReview={reviewAlert} session={selectedSession} /> : null}
-      {contentStatus !== 'error' && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
-      {contentStatus !== 'error' && !selectedCourse ? <CourseList courses={courses} filters={courseFilters} loading={contentStatus === 'loading'} pagination={coursePagination} onFiltersChange={changeCourseFilters} onOpen={openCourse} onRetry={() => loadCourses()} /> : null}
+      {contentStatus !== 'error' && showBiometricProfiles ? <BiometricProfileList filters={biometricFilters} loading={contentStatus === 'loading'} onBack={() => setShowBiometricProfiles(false)} onFiltersChange={changeBiometricFilters} onReset={resetListedBiometricProfile} onRetry={() => loadBiometricProfiles()} pagination={biometricPagination} profiles={biometricProfiles} /> : null}
+      {contentStatus !== 'error' && !showBiometricProfiles && selectedSession ? <PanelSessionDetail canManageBiometrics={profile.scope === 'institutional'} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onResetBiometrics={resetBiometrics} onReview={reviewAlert} session={selectedSession} /> : null}
+      {contentStatus !== 'error' && !showBiometricProfiles && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
+      {contentStatus !== 'error' && !showBiometricProfiles && !selectedCourse ? <CourseList courses={courses} filters={courseFilters} loading={contentStatus === 'loading'} pagination={coursePagination} onFiltersChange={changeCourseFilters} onOpen={openCourse} onRetry={() => loadCourses()} /> : null}
     </div>
   );
 }

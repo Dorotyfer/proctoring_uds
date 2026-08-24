@@ -18,6 +18,8 @@ const SessionListQuery = PaginationQuery.extend({
   dateTo: z.string().date().optional()
 });
 
+const BiometricProfileQuery = PaginationQuery;
+
 export async function registerPanelRoutes(app, options) {
   app.get('/v1/panel/sso', async (request, reply) => {
     const parsed = z.object({
@@ -61,6 +63,17 @@ export async function registerPanelRoutes(app, options) {
       request.panelUser.moodleUserId
     );
     return biometric ? { biometric } : reply.code(404).send({ error: 'Biometric profile not found' });
+  });
+
+  app.get('/v1/panel/biometric-profiles', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    if (!options.authService.canManageBiometrics(request.panelUser)) {
+      return reply.code(403).send({ error: 'Biometric profile management capability required' });
+    }
+    const query = BiometricProfileQuery.safeParse(request.query);
+    if (!query.success || !options.biometricProfileRepository?.list) {
+      return reply.code(400).send({ error: 'Invalid biometric profile query' });
+    }
+    return options.biometricProfileRepository.list(query.data);
   });
 
   app.get('/v1/panel/me', { preHandler: authorizePanel(options) }, async (request) => ({

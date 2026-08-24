@@ -12,6 +12,33 @@ export function createBiometricProfileRepository(databaseUrl) {
       return rows.length === 0 ? null : mapProfile(rows[0]);
     },
 
+    async list(query) {
+      const search = query.query ? `%${escapeLike(query.query)}%` : null;
+      const whereSql = search ? "WHERE moodle_user_id LIKE ? ESCAPE '\\\\'" : '';
+      const values = search ? [search] : [];
+      const [countRows] = await pool.execute(`
+        SELECT COUNT(*) AS total
+        FROM proctoring_biometric_profiles
+        ${whereSql}
+      `, values);
+      const [rows] = await pool.execute(`
+        SELECT moodle_user_id, enrollment_version, status,
+          enrolled_at, last_verified_at, revoked_at
+        FROM proctoring_biometric_profiles
+        ${whereSql}
+        ORDER BY enrolled_at DESC, moodle_user_id
+        LIMIT ? OFFSET ?
+      `, [...values, query.pageSize, offset(query)]);
+      const total = Number(countRows[0]?.total ?? 0);
+      return {
+        profiles: rows.map(mapProfileSummary),
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / query.pageSize)
+      };
+    },
+
     async withUserLock(moodleUserId, callback) {
       const connection = await pool.getConnection();
       let transactionOpen = false;
@@ -248,4 +275,23 @@ function mapCheck(row) {
     similarity: row.similarity === null ? null : Number(row.similarity),
     threshold: Number(row.threshold)
   };
+}
+
+function mapProfileSummary(row) {
+  return {
+    enrolledAt: toIsoDate(row.enrolled_at),
+    enrollmentVersion: Number(row.enrollment_version),
+    lastVerifiedAt: row.last_verified_at ? toIsoDate(row.last_verified_at) : null,
+    moodleUserId: row.moodle_user_id,
+    revokedAt: row.revoked_at ? toIsoDate(row.revoked_at) : null,
+    status: row.status
+  };
+}
+
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function offset(query) {
+  return (query.page - 1) * query.pageSize;
 }

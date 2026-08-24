@@ -184,6 +184,12 @@ p {
   gap: 5px;
 }
 
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .panel-userbar span,
 .attempt-row small,
 .course-card small,
@@ -260,6 +266,29 @@ p {
   padding: 28px 0;
   color: var(--muted);
   text-align: center;
+}
+
+.profile-table-wrap {
+  overflow-x: auto;
+}
+
+.profile-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.profile-table th,
+.profile-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 10px;
+  text-align: left;
+}
+
+.profile-table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .back-button {
