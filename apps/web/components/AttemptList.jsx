@@ -24,10 +24,13 @@ export default function AttemptList({ course, filters, loading, pagination, sess
       {!loading && sessions.length === 0 ? <div className="panel-state"><p>No hay intentos que coincidan con los filtros.</p><button className="text-button" type="button" onClick={onRetry}>Actualizar</button></div> : null}
       <div className="attempt-list">
         {sessions.map((session) => (
-          <button className="attempt-row" key={session.id} type="button" onClick={() => onOpen(session.id)}>
-            <span><strong>{session.studentName || 'Estudiante no informado'}</strong><small>{session.studentDocumentLast4 || 'Documento no informado'} · {session.quizName || `Cuestionario ${session.quizId}`}</small></span>
+          <div className="attempt-row" key={session.id}>
+            <button className="attempt-open" type="button" onClick={() => onOpen(session.id)}>
+              <span><strong>{session.studentName || 'Estudiante no informado'}</strong><small>{session.studentDocumentLast4 || 'Documento no informado'} · {session.quizName || `Cuestionario ${session.quizId}`}</small></span>
+            </button>
             <span><small>{formatDate(session.createdAt)} · {session.deviceMode} · Nivel {controlLevelLabel(session.controlLevel)}</small><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span><span className="badge">{riskSummaryLabel(session.riskCategory)}</span></span>
-          </button>
+            <button className="text-button report-button" type="button" onClick={() => onOpen(session.id)}>Ver reporte de fraude</button>
+          </div>
         ))}
       </div>
       <div className="pagination" aria-label="Paginación de intentos">

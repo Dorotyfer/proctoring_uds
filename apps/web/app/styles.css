@@ -248,8 +248,31 @@ p {
   text-align: left;
 }
 
+.attempt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.attempt-open {
+  display: grid;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.report-button {
+  white-space: nowrap;
+}
+
 .course-card:hover,
-.attempt-row:hover {
+.attempt-row:hover,
+.attempt-open:focus-visible {
   border-color: var(--accent);
 }
 
@@ -260,6 +283,12 @@ p {
 
 .attempt-row > span:last-child {
   justify-items: end;
+}
+
+.attempt-row > span:nth-child(2) {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
 }
 
 .panel-state {

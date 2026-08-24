@@ -5,6 +5,12 @@ namespace quizaccess_proctoring;
 defined('MOODLE_INTERNAL') || die();
 
 class rule_test extends \advanced_testcase {
+    public function test_declares_all_quiz_setting_language_strings(): void {
+        $this->assertSame('Habilitado', get_string('enabled', 'quizaccess_proctoring'));
+        $this->assertSame('Modo permitido', get_string('allowedmode', 'quizaccess_proctoring'));
+        $this->assertSame('Política ante fallos', get_string('failurepolicy', 'quizaccess_proctoring'));
+    }
+
     public function test_saves_and_deletes_quiz_policy(): void {
         global $CFG, $DB;
 
