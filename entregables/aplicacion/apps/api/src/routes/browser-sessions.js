@@ -1,10 +1,18 @@
 import { z } from 'zod';
 
+import {
+  BiometricConsentRequiredError,
+  BiometricUnavailableError
+} from '../services/biometric-profile-service.js';
+import { isJpegBuffer } from '../services/image-validation.js';
+
 const ActivationInput = z.object({
   identityPassed: z.literal(true),
   livenessPassed: z.literal(true),
   livenessChallenge: z.array(z.enum(['blink', 'turn-left', 'turn-right'])).length(2),
-  referenceCapture: z.string().regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/)
+  referenceCapture: z.string().regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/),
+  biometricConsentAccepted: z.boolean().optional(),
+  biometricSamples: z.array(z.array(z.number().finite())).length(3).optional()
 }).refine((input) => new Set(input.livenessChallenge).size === 2, {
   message: 'Liveness challenge steps must be unique'
 });
@@ -14,7 +22,7 @@ const EvidenceInput = z.object({
   capture: z.string().regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/)
 });
 
-function authorizeBrowserSession(request, reply) {
+export function authorizeBrowserSession(request, reply) {
   const parsedId = z.string().uuid().safeParse(request.params.sessionId);
   if (!parsedId.success) {
     reply.code(400).send({ error: 'Invalid session identifier' });
@@ -46,6 +54,9 @@ export async function registerBrowserSessionRoutes(app, options) {
 
     return {
       session: {
+        biometric: options.biometricService
+          ? await options.biometricService.getStatus(session.moodleUserId)
+          : { enrollmentVersion: null, state: 'unregistered' },
         id: session.id,
         deviceMode: session.deviceMode,
         status: session.status,
@@ -65,25 +76,76 @@ export async function registerBrowserSessionRoutes(app, options) {
     if (!sessionId) {
       return reply;
     }
+    if (options.requireHttps && !isHttpsRequest(request)) {
+      return reply.code(400).send({ error: 'Biometric activation requires HTTPS' });
+    }
     const parsed = ActivationInput.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Identity and liveness checks are required' });
     }
 
     const referenceCapture = Buffer.from(parsed.data.referenceCapture.split(',')[1], 'base64');
-    if (referenceCapture.length === 0 || referenceCapture.length > 200 * 1024) {
-      return reply.code(400).send({ error: 'Reference capture must not exceed 200 KB' });
+    if (!isJpegBuffer(referenceCapture) || referenceCapture.length > 200 * 1024) {
+      return reply.code(400).send({ error: 'Reference capture must be a JPEG not exceeding 200 KB' });
     }
 
-    const session = await options.sessionService.activate(sessionId, {
-      livenessChallenge: parsed.data.livenessChallenge,
-      referenceCapture
-    });
+    let activation;
+    try {
+      activation = await options.sessionService.activate(sessionId, {
+        biometricConsentAccepted: parsed.data.biometricConsentAccepted,
+        biometricSamples: parsed.data.biometricSamples,
+        livenessChallenge: parsed.data.livenessChallenge,
+        referenceCapture
+      });
+    } catch (error) {
+      if (error instanceof BiometricConsentRequiredError) {
+        return reply.code(409).send({ code: 'biometric_consent_required', error: error.message });
+      }
+      if (error instanceof BiometricUnavailableError) {
+        return reply.code(503).send({ error: 'Biometric verification is temporarily unavailable' });
+      }
+      if (error instanceof TypeError) {
+        return reply.code(400).send({ error: 'Invalid biometric samples' });
+      }
+      throw error;
+    }
+
+    const session = activation?.session ?? activation;
     if (!session) {
       return reply.code(409).send({ error: 'Session cannot be activated' });
     }
 
-    return { session: { id: session.id, status: session.status } };
+    let biometric = activation?.biometric ?? null;
+    if (biometric?.status === 'mismatch') {
+      if (!options.incidentService) {
+        return reply.code(503).send({ error: 'Biometric alert service is unavailable' });
+      }
+      try {
+        const incident = await options.incidentService.record(session.id, {
+          capture: referenceCapture,
+          clientEventId: session.id,
+          metadata: {
+            mismatchedSamples: biometric.mismatchedSamples,
+            profileVersion: biometric.enrollmentVersion,
+            similarity: biometric.similarity,
+            source: 'biometric_verification',
+            threshold: biometric.threshold
+          },
+          occurredAt: new Date().toISOString(),
+          type: 'biometric_mismatch'
+        });
+        biometric = { ...biometric, alertId: incident.alert?.id ?? null };
+      } catch {
+        return reply.code(503).send({ error: 'Biometric alert storage is temporarily unavailable' });
+      }
+    }
+
+    return {
+      biometric: biometric
+        ? { alertId: biometric.alertId ?? null, status: biometric.status }
+        : undefined,
+      session: { id: session.id, status: session.status }
+    };
   });
 
   app.post('/v1/sessions/:sessionId/evidence', async (request, reply) => {
@@ -102,10 +164,18 @@ export async function registerBrowserSessionRoutes(app, options) {
       return reply.code(409).send({ error: 'Evidence cannot be stored for this session' });
     }
     const capture = Buffer.from(parsed.data.capture.split(',')[1], 'base64');
-    if (capture.length === 0 || capture.length > 200 * 1024) {
-      return reply.code(400).send({ error: 'Evidence capture must not exceed 200 KB' });
+    if (!isJpegBuffer(capture) || capture.length > 200 * 1024) {
+      return reply.code(400).send({ error: 'Evidence capture must be a JPEG not exceeding 200 KB' });
     }
     const evidence = await options.evidenceService.storeCapture(sessionId, parsed.data.kind, capture);
     return reply.code(201).send({ evidence: { id: evidence.id, kind: evidence.kind } });
   });
+}
+
+function isHttpsRequest(request) {
+  const forwardedProtocol = request.headers['x-forwarded-proto'];
+  const protocol = typeof forwardedProtocol === 'string'
+    ? forwardedProtocol.split(',')[0].trim()
+    : request.protocol;
+  return protocol === 'https';
 }

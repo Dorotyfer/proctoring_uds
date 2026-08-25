@@ -5,6 +5,12 @@ namespace quizaccess_proctoring;
 defined('MOODLE_INTERNAL') || die();
 
 class rule_test extends \advanced_testcase {
+    public function test_declares_all_quiz_setting_language_strings(): void {
+        $this->assertSame('Habilitado', get_string('enabled', 'quizaccess_proctoring'));
+        $this->assertSame('Modo permitido', get_string('allowedmode', 'quizaccess_proctoring'));
+        $this->assertSame('Política ante fallos', get_string('failurepolicy', 'quizaccess_proctoring'));
+    }
+
     public function test_saves_and_deletes_quiz_policy(): void {
         global $CFG, $DB;
 
@@ -67,6 +73,25 @@ class rule_test extends \advanced_testcase {
         $settings = (object)['allowedmode' => 'browser', 'quizid' => $quiz->id];
 
         $this->assertSame('browser', $this->resolve_device_mode($settings));
+    }
+
+    public function test_saves_the_control_level_for_a_quiz(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->get_plugin_generator('mod_quiz')->create_instance([
+            'course' => $course->id
+        ]);
+        $quiz->proctoringenabled = 1;
+        $quiz->proctoringallowedmode = 'either';
+        $quiz->proctoringfailurepolicy = 'block';
+        $quiz->proctoringcontrollevel = 'high';
+
+        \quizaccess_proctoring::save_settings($quiz);
+
+        $settings = $DB->get_record('quizaccess_proctoring', ['quizid' => $quiz->id], '*', MUST_EXIST);
+        $this->assertSame('high', $settings->controllevel);
     }
 
     private function resolve_device_mode(\stdClass $settings): string {

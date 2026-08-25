@@ -11,12 +11,13 @@ export function createEvidenceRepository(databaseUrl) {
       const id = crypto.randomUUID();
       await pool.execute(`
         INSERT INTO proctoring_evidence (
-          id, session_id, kind, object_key, content_type, byte_size, sha256,
+          id, session_id, event_id, kind, object_key, content_type, byte_size, sha256,
           encryption_iv, encryption_tag, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [id, input.sessionId, input.kind, input.objectKey, input.contentType,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)
+      `, [id, input.sessionId, input.eventId ?? null, input.kind, input.objectKey, input.contentType,
         input.byteSize, input.sha256, input.encryptionIv, input.encryptionTag, toMysqlDate(input.expiresAt)]);
-      return findEvidenceById(pool, id);
+      return input.eventId ? findEvidenceByEventId(pool, input.eventId) : findEvidenceById(pool, id);
     },
     async findById(id) {
       const [rows] = await pool.execute(`
@@ -25,6 +26,15 @@ export function createEvidenceRepository(databaseUrl) {
         JOIN proctoring_sessions sessions ON sessions.id = evidence.session_id
         WHERE evidence.id = ? AND evidence.deleted_at IS NULL
       `, [id]);
+      return rows.length === 0 ? null : mapEvidence(rows[0]);
+    },
+    async findByEventId(eventId) {
+      const [rows] = await pool.execute(`
+        SELECT evidence.*, sessions.moodle_course_id
+        FROM proctoring_evidence evidence
+        JOIN proctoring_sessions sessions ON sessions.id = evidence.session_id
+        WHERE evidence.event_id = ? AND evidence.deleted_at IS NULL
+      `, [eventId]);
       return rows.length === 0 ? null : mapEvidence(rows[0]);
     },
     async audit(input) {
@@ -59,10 +69,16 @@ async function findEvidenceById(pool, id) {
   return mapEvidence(rows[0]);
 }
 
+async function findEvidenceByEventId(pool, eventId) {
+  const [rows] = await pool.execute('SELECT * FROM proctoring_evidence WHERE event_id = ?', [eventId]);
+  return mapEvidence(rows[0]);
+}
+
 function mapEvidence(row) {
   return {
     id: row.id,
     sessionId: row.session_id,
+    eventId: row.event_id ?? null,
     courseId: row.moodle_course_id ?? null,
     kind: row.kind,
     objectKey: row.object_key,

@@ -6,6 +6,7 @@ export function loadConfig(environment = process.env) {
     'MOODLE_INTEGRATION_KEY',
     'WEB_ORIGIN',
     'API_PUBLIC_URL',
+    'BIOMETRIC_ENCRYPTION_KEY',
     'PANEL_SSO_SECRET',
     'S3_ENDPOINT',
     'S3_REGION',
@@ -29,12 +30,20 @@ export function loadConfig(environment = process.env) {
     throw new Error('EVIDENCE_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
   }
 
+  const biometricEncryptionKey = Buffer.from(environment.BIOMETRIC_ENCRYPTION_KEY, 'base64');
+  if (biometricEncryptionKey.length !== 32) {
+    throw new Error('BIOMETRIC_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+  }
+
   let apiOrigin;
+  let apiBaseUrl;
   let storageEndpoint;
   let webOrigin;
   try {
     webOrigin = new URL(environment.WEB_ORIGIN).origin;
-    apiOrigin = new URL(environment.API_PUBLIC_URL).origin;
+    const apiUrl = new URL(environment.API_PUBLIC_URL);
+    apiOrigin = apiUrl.origin;
+    apiBaseUrl = apiUrl.toString().replace(/\/$/, '');
     storageEndpoint = new URL(environment.S3_ENDPOINT).toString();
   } catch {
     throw new Error('WEB_ORIGIN, API_PUBLIC_URL and S3_ENDPOINT must be absolute URLs');
@@ -45,6 +54,11 @@ export function loadConfig(environment = process.env) {
     throw new Error('EVIDENCE_RETENTION_DAYS must be an integer between 1 and 3650');
   }
 
+  const biometricMatchThreshold = Number(environment.BIOMETRIC_MATCH_THRESHOLD ?? 0.5);
+  if (!Number.isFinite(biometricMatchThreshold) || biometricMatchThreshold < 0 || biometricMatchThreshold > 1) {
+    throw new Error('BIOMETRIC_MATCH_THRESHOLD must be a number between 0 and 1');
+  }
+
   const port = Number(environment.PROCTORING_PORT ?? 3001);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PROCTORING_PORT must be a valid TCP port');
@@ -53,7 +67,10 @@ export function loadConfig(environment = process.env) {
   const { databaseUrl } = loadDatabaseConfig(environment);
 
   return {
+    apiBaseUrl,
     apiOrigin,
+    biometricEncryptionKey,
+    biometricMatchThreshold,
     databaseUrl,
     evidenceEncryptionKey,
     evidenceRetentionDays,

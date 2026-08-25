@@ -22,16 +22,17 @@ export function createSessionRepository(databaseUrl) {
         await connection.execute(`
           INSERT INTO proctoring_sessions (
             id, moodle_user_id, moodle_course_id, moodle_quiz_id, moodle_attempt_id,
-            quiz_name, student_name, student_document, device_mode, issued_at, expires_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            quiz_name, student_name, student_document, device_mode, control_level, issued_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
             quiz_name = VALUES(quiz_name),
             student_name = VALUES(student_name),
-            student_document = VALUES(student_document)
+            student_document = VALUES(student_document),
+            control_level = VALUES(control_level)
         `, [
           crypto.randomUUID(), input.moodleUserId, input.moodleCourseId,
           input.moodleQuizId, input.moodleAttemptId, input.quizName,
-          input.studentName, input.studentDocument, input.deviceMode,
+          input.studentName, input.studentDocument, input.deviceMode, input.controlLevel,
           toMysqlDate(input.issuedAt), toMysqlDate(input.expiresAt)
         ]);
         await connection.commit();
@@ -81,7 +82,8 @@ function sessionSelect(condition) {
   return `
     SELECT sessions.id, sessions.moodle_user_id, sessions.moodle_course_id, sessions.moodle_quiz_id,
       moodle_attempt_id, device_mode, status, issued_at, expires_at, created_at,
-      quiz_name, student_name, student_document, liveness_challenge, courses.name AS course_name
+      quiz_name, student_name, student_document, device_mode, control_level,
+      liveness_challenge, courses.name AS course_name
     FROM proctoring_sessions sessions
     LEFT JOIN proctoring_courses courses ON courses.moodle_course_id = sessions.moodle_course_id
     WHERE ${condition}
@@ -100,6 +102,7 @@ function mapSession(row) {
     studentName: row.student_name,
     studentDocument: row.student_document,
     deviceMode: row.device_mode,
+    controlLevel: row.control_level ?? 'medium',
     status: row.status,
     issuedAt: toIsoDate(row.issued_at),
     expiresAt: toIsoDate(row.expires_at),

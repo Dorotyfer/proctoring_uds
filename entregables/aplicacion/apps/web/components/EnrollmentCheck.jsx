@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { captureReference } from '@/lib/camera';
-import { describeFaceState } from '@/lib/face-analysis';
+import { describeFaceState, extractFaceEmbedding } from '@/lib/face-analysis';
 import { detectFrame } from '@/lib/human';
 
 const messages = {
@@ -17,6 +17,7 @@ export function EnrollmentCheck({ detector, onComplete, onFailure, stream }) {
   const completed = useRef(false);
   const videoRef = useRef(null);
   const validFrames = useRef(0);
+  const embeddings = useRef([]);
   const [state, setState] = useState('absent');
 
   useEffect(() => {
@@ -37,16 +38,25 @@ export function EnrollmentCheck({ detector, onComplete, onFailure, stream }) {
         return;
       }
       setState(description.state);
-      validFrames.current = description.state === 'valid' ? validFrames.current + 1 : 0;
-      if (validFrames.current >= 5 && !completed.current) {
+      const embedding = description.state === 'valid' ? extractFaceEmbedding(description.face) : null;
+      validFrames.current = embedding ? validFrames.current + 1 : 0;
+      if (embedding) {
+        embeddings.current = [...embeddings.current, embedding].slice(-3);
+      }
+      if (validFrames.current >= 5 && embeddings.current.length === 3 && !completed.current) {
         completed.current = true;
-        onComplete(captureReference(video));
+        onComplete({
+          biometricSamples: embeddings.current,
+          referenceCapture: captureReference(video)
+        });
       }
     }
 
     const interval = window.setInterval(() => void inspect(), 500);
     const timeout = window.setTimeout(() => {
-      if (!completed.current) onFailure();
+      if (!completed.current) {
+        onFailure(video.readyState >= 2 ? captureReference(video) : null);
+      }
     }, 45_000);
     return () => {
       cancelled = true;

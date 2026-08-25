@@ -15,6 +15,8 @@ class session_manager_test extends \advanced_testcase {
     }
 
     public function test_sends_panel_metadata_for_the_attempt(): void {
+        global $DB;
+
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course(['fullname' => 'Curso de prueba']);
         $student = $this->getDataGenerator()->create_user([
@@ -25,6 +27,13 @@ class session_manager_test extends \advanced_testcase {
         $quiz = $this->getDataGenerator()->create_module('quiz', [
             'course' => $course->id,
             'name' => 'Examen final'
+        ]);
+        $DB->insert_record('quizaccess_proctoring', (object)[
+            'quizid' => $quiz->id,
+            'enabled' => 1,
+            'allowedmode' => 'either',
+            'failurepolicy' => 'block',
+            'controllevel' => 'high'
         ]);
         $attempt = (object)[
             'id' => 123,
@@ -39,6 +48,7 @@ class session_manager_test extends \advanced_testcase {
                 $this->assertSame('Examen final', $payload['quizName']);
                 $this->assertSame('Ana Pérez', $payload['studentName']);
                 $this->assertSame('1234567', $payload['studentDocument']);
+                $this->assertSame('high', $payload['controlLevel']);
                 return true;
             }
         ))->willReturn(['session' => ['id' => 'remote-session', 'status' => 'pending']]);

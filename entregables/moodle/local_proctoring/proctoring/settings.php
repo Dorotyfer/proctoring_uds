@@ -12,6 +12,13 @@ if ($hassiteconfig) {
         '',
         PARAM_URL
     ));
+    $settings->add(new admin_setting_configtext(
+        'local_proctoring/publicapiurl',
+        get_string('publicapiurl', 'local_proctoring'),
+        get_string('publicapiurl_desc', 'local_proctoring'),
+        '',
+        PARAM_URL
+    ));
     $settings->add(new admin_setting_configpasswordunmask(
         'local_proctoring/panelssosecret',
         get_string('panelssosecret', 'local_proctoring'),

@@ -41,6 +41,34 @@ test('stores only encrypted evidence in object storage and decrypts authorized r
   assert.equal(records[0].contentType, 'image/jpeg');
 });
 
+test('uses a stable event-linked object key for incident evidence', async () => {
+  let storedKey;
+  let storedInput;
+  const service = createEvidenceService({
+    encryptionService: createEvidenceEncryptionService(Buffer.alloc(32, 7)),
+    objectStorage: {
+      async put(key) {
+        storedKey = key;
+      },
+      async delete() {}
+    },
+    repository: {
+      async create(input) {
+        storedInput = input;
+        return { id: 'evidence-incident', ...input };
+      }
+    },
+    retentionDays: 30
+  });
+
+  await service.storeCapture('session-1', 'alert', Buffer.from('jpeg-binary'), {
+    eventId: 'event-1'
+  });
+
+  assert.equal(storedKey, 'session-1/alert/event-1.enc');
+  assert.equal(storedInput.eventId, 'event-1');
+});
+
 test('purges expired objects and creates a retention audit record', async () => {
   const actions = [];
   const evidence = {

@@ -1,5 +1,6 @@
 import { createMysqlPool } from '../db/mysql-pool.js';
 import { parseJson, toIsoDate } from '../db/mysql-row.js';
+import { analyzeSessionRisk } from '../services/session-risk-analysis-service.js';
 
 export function createPanelRepository(databaseUrl) {
   const pool = createMysqlPool(databaseUrl);
@@ -10,9 +11,11 @@ export function createPanelRepository(databaseUrl) {
       if (scopeFilter.empty) {
         return pagedResult('courses', [], 0, query);
       }
-      const search = query.query === '' ? null : `%${escapeLike(query.query)}%`;
-      const searchSql = search ? `${scopeFilter.sql ? 'AND' : 'WHERE'} courses.name LIKE ? ESCAPE '\\\\'` : '';
-      const values = search ? [...scopeFilter.values, search] : scopeFilter.values;
+      const searchFilter = buildCourseSearchFilter(query.query);
+      const searchSql = searchFilter.sql
+        ? `${scopeFilter.sql ? 'AND' : 'WHERE'} ${searchFilter.sql}`
+        : '';
+      const values = [...scopeFilter.values, ...searchFilter.values];
       const [countRows] = await pool.execute(`
         SELECT COUNT(DISTINCT sessions.moodle_course_id) AS total
         FROM proctoring_sessions sessions
@@ -32,6 +35,7 @@ export function createPanelRepository(databaseUrl) {
         LIMIT ? OFFSET ?
       `, [...values, query.pageSize, offset(query)]);
       return pagedResult('courses', rows.map((row) => ({
+        code: row.moodle_course_id,
         id: row.moodle_course_id,
         name: row.name,
         attemptCount: Number(row.attempt_count),
@@ -56,12 +60,18 @@ export function createPanelRepository(databaseUrl) {
       const [rows] = await pool.execute(`
         SELECT sessions.id, sessions.moodle_course_id, sessions.moodle_quiz_id,
           sessions.moodle_attempt_id, sessions.quiz_name, sessions.student_name,
-          sessions.student_document, sessions.device_mode, sessions.status,
+          sessions.student_document, sessions.device_mode, sessions.control_level, sessions.status,
           sessions.created_at, sessions.prepared_at,
-          COUNT(alerts.id) AS alert_count,
-          COALESCE(SUM(alerts.status = 'open'), 0) AS open_alert_count
+          COALESCE(MAX(biometric_checks.result), IF(MAX(biometric_profiles.status = 'active'), 'enrolled', 'unregistered')) AS biometric_status,
+          COUNT(DISTINCT alerts.id) AS alert_count,
+          COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) AS open_alert_count,
+          GROUP_CONCAT(DISTINCT events.type) AS event_types,
+          GROUP_CONCAT(DISTINCT alerts.type) AS alert_types
         FROM proctoring_sessions sessions
         LEFT JOIN proctoring_alerts alerts ON alerts.session_id = sessions.id
+        LEFT JOIN proctoring_events events ON events.session_id = sessions.id
+        LEFT JOIN proctoring_biometric_checks biometric_checks ON biometric_checks.session_id = sessions.id
+        LEFT JOIN proctoring_biometric_profiles biometric_profiles ON biometric_profiles.moodle_user_id = sessions.moodle_user_id
         ${filters.whereSql}
         GROUP BY sessions.id
         ${filters.havingSql}
@@ -79,10 +89,17 @@ export function createPanelRepository(databaseUrl) {
         SELECT sessions.id, sessions.moodle_course_id, sessions.moodle_quiz_id,
           sessions.moodle_attempt_id, sessions.device_mode, sessions.status,
           sessions.created_at, sessions.prepared_at,
-          COUNT(alerts.id) AS alert_count,
-          COALESCE(SUM(alerts.status = 'open'), 0) AS open_alert_count
+          COALESCE(MAX(biometric_checks.result), IF(MAX(biometric_profiles.status = 'active'), 'enrolled', 'unregistered')) AS biometric_status,
+          COUNT(DISTINCT alerts.id) AS alert_count,
+          COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) AS open_alert_count,
+          sessions.control_level,
+          GROUP_CONCAT(DISTINCT events.type) AS event_types,
+          GROUP_CONCAT(DISTINCT alerts.type) AS alert_types
         FROM proctoring_sessions sessions
         LEFT JOIN proctoring_alerts alerts ON alerts.session_id = sessions.id
+        LEFT JOIN proctoring_events events ON events.session_id = sessions.id
+        LEFT JOIN proctoring_biometric_checks biometric_checks ON biometric_checks.session_id = sessions.id
+        LEFT JOIN proctoring_biometric_profiles biometric_profiles ON biometric_profiles.moodle_user_id = sessions.moodle_user_id
         ${filter.sql}
         GROUP BY sessions.id
         ORDER BY sessions.created_at DESC LIMIT 200
@@ -95,7 +112,13 @@ export function createPanelRepository(databaseUrl) {
         return null;
       }
       const [sessionRows] = await pool.execute(`
-        SELECT * FROM proctoring_sessions sessions
+        SELECT sessions.*, biometric_checks.result AS biometric_result,
+          biometric_checks.similarity AS biometric_similarity,
+          biometric_checks.enrollment_version AS biometric_enrollment_version,
+          biometric_profiles.status AS biometric_profile_status
+        FROM proctoring_sessions sessions
+        LEFT JOIN proctoring_biometric_checks biometric_checks ON biometric_checks.session_id = sessions.id
+        LEFT JOIN proctoring_biometric_profiles biometric_profiles ON biometric_profiles.moodle_user_id = sessions.moodle_user_id
         WHERE sessions.id = ? ${filter.sql}
       `, [id, ...filter.values]);
       if (sessionRows.length === 0) {
@@ -103,12 +126,22 @@ export function createPanelRepository(databaseUrl) {
       }
       const [events, alerts, evidence] = await Promise.all([
         pool.execute('SELECT id, type, occurred_at, metadata FROM proctoring_events WHERE session_id = ? ORDER BY occurred_at', [id]),
-        pool.execute('SELECT id, event_id, type, severity, status, created_at, reviewed_at, reviewed_by, review_note FROM proctoring_alerts WHERE session_id = ? ORDER BY created_at', [id]),
-        pool.execute('SELECT id, kind, content_type, created_at, expires_at FROM proctoring_evidence WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at', [id])
+        pool.execute(`
+          SELECT alerts.id, alerts.event_id, alerts.type, alerts.severity, alerts.status,
+            alerts.created_at, alerts.reviewed_at, alerts.reviewed_by, alerts.review_note,
+            evidence.id AS evidence_id, events.metadata AS event_metadata
+          FROM proctoring_alerts alerts
+          JOIN proctoring_events events ON events.id = alerts.event_id
+          LEFT JOIN proctoring_evidence evidence
+            ON evidence.event_id = alerts.event_id AND evidence.deleted_at IS NULL
+          WHERE alerts.session_id = ? ORDER BY alerts.created_at
+        `, [id]),
+        pool.execute('SELECT id, event_id, kind, content_type, created_at, expires_at FROM proctoring_evidence WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at', [id])
       ]);
       const row = sessionRows[0];
       return {
         id: row.id,
+        moodleUserId: row.moodle_user_id,
         courseId: row.moodle_course_id,
         quizId: row.moodle_quiz_id,
         quizName: row.quiz_name ?? null,
@@ -116,18 +149,32 @@ export function createPanelRepository(databaseUrl) {
         studentName: row.student_name ?? null,
         studentDocument: row.student_document ?? null,
         deviceMode: row.device_mode,
+        controlLevel: row.control_level ?? 'medium',
         status: row.status,
+        biometric: {
+          enrollmentVersion: row.biometric_enrollment_version === null
+            ? null
+            : Number(row.biometric_enrollment_version),
+          profileState: row.biometric_profile_status ?? 'unregistered',
+          similarity: row.biometric_similarity === null ? null : Number(row.biometric_similarity),
+          status: row.biometric_result ?? (row.biometric_profile_status === 'active' ? 'enrolled' : 'unregistered')
+        },
         createdAt: toIsoDate(row.created_at),
         events: events[0].map((event) => ({
           ...event,
           occurred_at: toIsoDate(event.occurred_at),
           metadata: parseJson(event.metadata)
         })),
-        alerts: alerts[0].map((alert) => ({
-          ...alert,
-          created_at: toIsoDate(alert.created_at),
-          reviewed_at: alert.reviewed_at ? toIsoDate(alert.reviewed_at) : null
-        })),
+        alerts: alerts[0].map((alert) => {
+          const { event_metadata: eventMetadata, evidence_id: evidenceId, ...alertData } = alert;
+          return {
+            ...alertData,
+            captureStatus: mapIncidentCaptureStatus(parseJson(eventMetadata)?.captureStatus, evidenceId),
+            evidenceId: evidenceId ?? null,
+            created_at: toIsoDate(alert.created_at),
+            reviewed_at: alert.reviewed_at ? toIsoDate(alert.reviewed_at) : null
+          };
+        }),
         evidence: evidence[0].map((item) => ({
           ...item,
           created_at: toIsoDate(item.created_at),
@@ -194,6 +241,12 @@ function courseScopeFilter(scope, prefix) {
 }
 
 function mapSessionSummary(row) {
+  const risk = analyzeSessionRisk({
+    alerts: splitTypes(row.alert_types),
+    controlLevel: row.control_level,
+    events: splitTypes(row.event_types)
+  });
+
   return {
     id: row.id,
     courseId: row.moodle_course_id,
@@ -203,12 +256,20 @@ function mapSessionSummary(row) {
     studentName: row.student_name ?? null,
     studentDocumentLast4: maskStudentDocument(row.student_document),
     deviceMode: row.device_mode,
+    controlLevel: row.control_level ?? 'medium',
+    riskCategory: risk.category,
+    riskScore: risk.score,
     status: row.status,
+    biometricStatus: row.biometric_status ?? 'unregistered',
     createdAt: toIsoDate(row.created_at),
     preparedAt: row.prepared_at ? toIsoDate(row.prepared_at) : null,
     alertCount: Number(row.alert_count),
     openAlertCount: Number(row.open_alert_count)
   };
+}
+
+function splitTypes(value) {
+  return value ? String(value).split(',').map((type) => ({ type })) : [];
 }
 
 export function maskStudentDocument(document) {
@@ -220,6 +281,24 @@ export function maskStudentDocument(document) {
     return value;
   }
   return `${'•'.repeat(value.length - 4)}${value.slice(-4)}`;
+}
+
+export function mapIncidentCaptureStatus(captureStatus, evidenceId) {
+  if (evidenceId) {
+    return 'available';
+  }
+  return captureStatus === 'unavailable' ? 'unavailable' : 'pending';
+}
+
+export function buildCourseSearchFilter(query) {
+  if (!query) {
+    return { sql: '', values: [] };
+  }
+  const search = `%${escapeLike(query)}%`;
+  return {
+    sql: `(courses.name LIKE ? ESCAPE '\\\\' OR sessions.moodle_course_id LIKE ? ESCAPE '\\\\')`,
+    values: [search, search]
+  };
 }
 
 function sessionListFilters(courseId, scope, query) {
@@ -256,11 +335,11 @@ function sessionListFilters(courseId, scope, query) {
   }
   const having = [];
   if (query.alerts === 'open') {
-    having.push("SUM(alerts.status = 'open') > 0");
+    having.push("COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) > 0");
   } else if (query.alerts === 'any') {
-    having.push('COUNT(alerts.id) > 0');
+    having.push('COUNT(DISTINCT alerts.id) > 0');
   } else if (query.alerts === 'none') {
-    having.push('COUNT(alerts.id) = 0');
+    having.push('COUNT(DISTINCT alerts.id) = 0');
   }
   return {
     empty: false,

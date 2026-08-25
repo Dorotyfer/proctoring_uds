@@ -18,8 +18,10 @@ const validSession = {
 };
 
 test('accepts the supported device modes', () => {
+  assert.equal(CreateSessionInput.parse(validSession).controlLevel, 'medium');
   assert.equal(CreateSessionInput.parse(validSession).deviceMode, 'browser');
   assert.equal(CreateSessionInput.parse({ ...validSession, deviceMode: 'seb' }).deviceMode, 'seb');
+  assert.equal(CreateSessionInput.parse({ ...validSession, controlLevel: 'high' }).controlLevel, 'high');
 });
 
 test('rejects unsupported modes and invalid session durations', () => {
@@ -48,6 +50,17 @@ test('accepts only the event whitelist', () => {
     type: 'camera_interrupted',
     occurredAt: '2026-08-19T10:10:00.000Z'
   }).type, 'camera_interrupted');
+  assert.equal(SessionEventInput.parse({
+    clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
+    type: 'biometric_mismatch',
+    occurredAt: '2026-08-19T10:10:00.000Z'
+  }).type, 'biometric_mismatch');
+  assert.equal(SessionEventInput.parse({
+    clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
+    type: 'attention_signal',
+    occurredAt: '2026-08-19T10:10:00.000Z',
+    metadata: { signal: 'facial_expression_observation', expression: 'neutral', confidence: 0.91 }
+  }).type, 'attention_signal');
   assert.throws(() => SessionEventInput.parse({
     clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
     type: 'unknown',

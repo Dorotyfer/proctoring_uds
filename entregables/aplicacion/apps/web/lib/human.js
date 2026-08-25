@@ -1,20 +1,42 @@
 export async function createHumanDetector() {
   const { default: Human } = await import('@/generated/human.esm.js');
-  const human = new Human({
-    backend: 'webgl',
-    body: { enabled: false },
-    face: {
-      detector: { rotation: true },
-      enabled: true,
-      mesh: { enabled: true }
-    },
-    gesture: { enabled: false },
-    hand: { enabled: false },
-    modelBasePath: '/models',
-    object: { enabled: false }
-  });
-  await human.load();
-  return human;
+  return createDetectorWithFallback(Human);
+}
+
+export function getModelBasePath(pathname = '') {
+  return pathname.startsWith('/proctoring/') ? '/proctoring/models' : '/models';
+}
+
+export async function createDetectorWithFallback(Human) {
+  let lastError;
+  const modelBasePath = getModelBasePath(
+    typeof window === 'undefined' ? '' : window.location.pathname
+  );
+
+  for (const backend of ['webgl', 'cpu']) {
+    try {
+      const human = new Human({
+        backend,
+        body: { enabled: false },
+        face: {
+          detector: { rotation: true },
+          enabled: true,
+          mesh: { enabled: true },
+          description: { enabled: true, skipFrames: 0, skipTime: 0 }
+        },
+        gesture: { enabled: false },
+        hand: { enabled: false },
+        modelBasePath,
+        object: { enabled: false }
+      });
+      await human.load();
+      return human;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 export function detectFrame(human, video) {

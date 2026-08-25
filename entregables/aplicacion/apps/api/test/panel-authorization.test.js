@@ -18,6 +18,7 @@ test('limits teacher panel queries to signed Moodle course claims', async () => 
     sessionService: {},
     logger: false,
     panel: {
+      apiBaseUrl: 'https://api.test/proctoring-api',
       apiOrigin: 'http://api.test',
       authService,
       cookieName: 'proctoring_panel',
@@ -59,6 +60,7 @@ test('limits teacher panel queries to signed Moodle course claims', async () => 
   });
 
   assert.equal(login.statusCode, 302);
+  assert.match(login.headers['set-cookie'], /Path=\/proctoring-api\/v1\/panel/);
   assert.equal(sessions.statusCode, 200);
   assert.equal(evidence.statusCode, 403);
   assert.deepEqual(receivedScopes, [{ courseIds: ['course-a'], institutional: false }]);
@@ -181,6 +183,85 @@ test('rejects a forged panel token', () => {
   assert.equal(service.verifyMoodleToken(`${signToken({ exp: 9999999999 })}tampered`), null);
 });
 
+test('allows only institutional managers to require biometric re-enrollment', async () => {
+  const resetCalls = [];
+  const app = await buildPanelApp({
+    biometricProfileRepository: {
+      async reset(moodleUserId, actorMoodleUserId) {
+        resetCalls.push({ actorMoodleUserId, moodleUserId });
+        return { moodleUserId, state: 'revoked' };
+      }
+    }
+  });
+  const managerCookie = await signInPanel(app, [PANEL_CAPABILITIES.managePolicies, PANEL_CAPABILITIES.view]);
+  const teacherCookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+  const path = '/v1/panel/biometric-profiles/student-1/reset';
+
+  const managerResponse = await app.inject({ method: 'POST', url: path, headers: { cookie: managerCookie } });
+  const teacherResponse = await app.inject({ method: 'POST', url: path, headers: { cookie: teacherCookie } });
+
+  assert.equal(managerResponse.statusCode, 200);
+  assert.deepEqual(managerResponse.json().biometric, { moodleUserId: 'student-1', state: 'revoked' });
+  assert.equal(teacherResponse.statusCode, 403);
+  assert.deepEqual(resetCalls, [{ actorMoodleUserId: 'reviewer-1', moodleUserId: 'student-1' }]);
+  await app.close();
+});
+
+test('lists biometric profiles only for institutional managers', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    biometricProfileRepository: {
+      async list(query) {
+        received.push(query);
+        return {
+          profiles: [{
+            enrolledAt: '2026-08-24T12:00:00.000Z',
+            enrollmentVersion: 2,
+            lastVerifiedAt: null,
+            moodleUserId: 'student-1',
+            revokedAt: null,
+            status: 'active',
+            studentDocument: '1234567',
+            studentName: 'Ana Pérez'
+          }],
+          page: 2,
+          pageSize: 10,
+          total: 11,
+          totalPages: 2
+        };
+      }
+    }
+  });
+  const managerCookie = await signInPanel(app, [PANEL_CAPABILITIES.institution]);
+  const teacherCookie = await signInPanel(app, [PANEL_CAPABILITIES.view]);
+
+  const managerResponse = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/biometric-profiles?query=student&page=2&pageSize=10',
+    headers: { cookie: managerCookie }
+  });
+  const teacherResponse = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/biometric-profiles',
+    headers: { cookie: teacherCookie }
+  });
+
+  assert.equal(managerResponse.statusCode, 200);
+  assert.equal(teacherResponse.statusCode, 403);
+  assert.deepEqual(received, [{ page: 2, pageSize: 10, query: 'student' }]);
+  assert.deepEqual(managerResponse.json().profiles[0], {
+    enrolledAt: '2026-08-24T12:00:00.000Z',
+    enrollmentVersion: 2,
+    lastVerifiedAt: null,
+    moodleUserId: 'student-1',
+    revokedAt: null,
+    status: 'active',
+    studentDocument: '1234567',
+    studentName: 'Ana Pérez'
+  });
+  await app.close();
+});
+
 test('returns only alert evidence in an authorized session detail', async () => {
   const app = await buildPanelApp({
     repository: {
@@ -206,6 +287,51 @@ test('returns only alert evidence in an authorized session detail', async () => 
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json().session.evidence, [{ id: 'alert-evidence', kind: 'alert' }]);
+  await app.close();
+});
+
+test('returns an explainable risk analysis in session detail', async () => {
+  const received = [];
+  const app = await buildPanelApp({
+    riskAnalysisService: {
+      analyzeSessionRisk(input) {
+        received.push(input);
+        return {
+          category: 'medium_risk',
+          controlLevel: 'high',
+          counts: { face_absent: 2 },
+          reasons: [{ code: 'face_absent', count: 2, label: 'Rostro ausente', points: 20 }],
+          score: 20
+        };
+      }
+    },
+    repository: {
+      async getSession() {
+        return {
+          alerts: [],
+          controlLevel: 'high',
+          events: [{ type: 'face_absent' }],
+          evidence: [],
+          id: '55555555-5555-4555-8555-555555555555'
+        };
+      }
+    }
+  });
+  const cookie = await signInPanel(app, [PANEL_CAPABILITIES.institution]);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/v1/panel/sessions/55555555-5555-4555-8555-555555555555',
+    headers: { cookie }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().session.risk.category, 'medium_risk');
+  assert.deepEqual(received, [{
+    alerts: [],
+    controlLevel: 'high',
+    events: [{ type: 'face_absent' }]
+  }]);
   await app.close();
 });
 
@@ -293,6 +419,8 @@ async function buildPanelApp(overrides = {}) {
       cookieName: 'proctoring_panel',
       evidenceRepository: overrides.evidenceRepository ?? {},
       evidenceService: overrides.evidenceService ?? {},
+      biometricProfileRepository: overrides.biometricProfileRepository ?? {},
+      riskAnalysisService: overrides.riskAnalysisService ?? null,
       repository: overrides.repository ?? {},
       secureCookies: false,
       webOrigin: 'http://web.test'

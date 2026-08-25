@@ -2,7 +2,9 @@
 
 $string['pluginname'] = 'Proctoring';
 $string['apiurl'] = 'Proctoring API URL';
-$string['apiurl_desc'] = 'HTTPS URL of the independent proctoring API.';
+$string['apiurl_desc'] = 'Server-to-server HTTPS URL of the independent proctoring API.';
+$string['publicapiurl'] = 'Public proctoring API URL';
+$string['publicapiurl_desc'] = 'HTTPS URL students and reviewers use to reach the proctoring API.';
 $string['integrationkey'] = 'Moodle integration key';
 $string['integrationkey_desc'] = 'Shared server-to-server secret. Never expose it to students.';
 $string['panelurl'] = 'Proctoring panel URL';

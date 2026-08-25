@@ -6,11 +6,13 @@ export const EventType = z.enum([
   'multiple_faces',
   'face_out_of_frame',
   'identity_check_failed',
+  'biometric_mismatch',
   'liveness_check_failed',
   'page_visibility_changed',
   'network_disconnected',
   'network_reconnected',
-  'seb_event'
+  'seb_event',
+  'attention_signal'
 ]);
 
 export const SessionEventInput = z.object({

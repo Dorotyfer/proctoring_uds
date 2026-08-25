@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import { createApiLoadOperation } from '../src/pilot/api-load-scenario.js';
 
+const jpegDataUrl = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9]).toString('base64')}`;
+
 test('runs create, token, activation and event requests for one active session', async () => {
   const calls = [];
   const responses = [
@@ -20,7 +22,7 @@ test('runs create, token, activation and event requests for one active session',
     apiUrl: 'https://api.example.edu',
     fetchImplementation,
     integrationKey: 'integration-key',
-    referenceCapture: 'data:image/jpeg;base64,anBlZw=='
+    referenceCapture: jpegDataUrl
   });
   const fixture = {
     courseName: 'Curso piloto A',
@@ -51,7 +53,7 @@ test('surfaces API status codes so the load runner can retry transient failures'
     apiUrl: 'https://api.example.edu',
     fetchImplementation: async () => new Response('{"error":"unavailable"}', { status: 503 }),
     integrationKey: 'integration-key',
-    referenceCapture: 'data:image/jpeg;base64,anBlZw=='
+    referenceCapture: jpegDataUrl
   });
 
   await assert.rejects(() => operation({ moodleAttemptId: 'attempt-1' }), /api_503/);

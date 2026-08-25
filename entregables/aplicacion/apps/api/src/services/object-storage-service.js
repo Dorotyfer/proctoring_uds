@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   PutObjectCommand,
   S3Client
 } from '@aws-sdk/client-s3';
@@ -17,6 +18,9 @@ export function createObjectStorageService(config) {
   });
 
   return {
+    async check() {
+      await client.send(new HeadBucketCommand({ Bucket: config.bucket }));
+    },
     async put(key, body, contentType) {
       await client.send(new PutObjectCommand({
         Bucket: config.bucket,

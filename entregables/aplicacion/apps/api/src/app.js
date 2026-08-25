@@ -5,6 +5,7 @@ import fastifyJwt from '@fastify/jwt';
 
 import { registerBrowserSessionRoutes } from './routes/browser-sessions.js';
 import { registerEventRoutes } from './routes/events.js';
+import { registerIncidentRoutes } from './routes/incidents.js';
 import { registerPanelRoutes } from './routes/panel.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 
@@ -39,9 +40,15 @@ export async function buildApp(options) {
     eventService: options.eventService
   });
   await app.register(registerBrowserSessionRoutes, {
+    biometricService: options.biometricService,
     evidenceService: options.evidenceService,
+    incidentService: options.incidentService,
+    requireHttps: options.requireHttps ?? false,
     sessionService: options.sessionService
   });
+  if (options.incidentService) {
+    await app.register(registerIncidentRoutes, { incidentService: options.incidentService });
+  }
   if (options.panel) {
     await app.register(registerPanelRoutes, options.panel);
   }

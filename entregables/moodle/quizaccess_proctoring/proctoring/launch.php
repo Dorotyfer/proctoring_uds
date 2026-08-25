@@ -43,6 +43,9 @@ if ($callback) {
 if ($mode === 'monitor' && $status !== 'active') {
     throw new moodle_exception('sessionmissing', 'quizaccess_proctoring');
 }
+if ($mode === 'prepare' && $status !== 'pending') {
+    throw new moodle_exception('sessionmissing', 'quizaccess_proctoring');
+}
 
 $token = $client->issue_browser_token($local->remotesessionid);
 $returnurl = new moodle_url('/mod/quiz/accessrule/proctoring/launch.php', [

@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const DeviceMode = z.enum(['browser', 'seb']);
 
+export const ControlLevel = z.enum(['low', 'medium', 'high']);
+
 export const SessionStatus = z.enum(['pending', 'active', 'completed', 'expired']);
 
 export const CreateSessionInput = z.object({
@@ -14,6 +16,7 @@ export const CreateSessionInput = z.object({
   studentName: z.string().trim().min(1).max(255),
   studentDocument: z.string().trim().min(1).max(100).nullable(),
   deviceMode: DeviceMode,
+  controlLevel: ControlLevel.default('medium'),
   issuedAt: z.string().datetime(),
   expiresAt: z.string().datetime()
 }).superRefine((value, context) => {

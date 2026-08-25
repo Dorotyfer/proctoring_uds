@@ -22,13 +22,40 @@ export default function AttemptList({ course, filters, loading, pagination, sess
       </div>
       {loading ? <p className="panel-state">Cargando intentos…</p> : null}
       {!loading && sessions.length === 0 ? <div className="panel-state"><p>No hay intentos que coincidan con los filtros.</p><button className="text-button" type="button" onClick={onRetry}>Actualizar</button></div> : null}
-      <div className="attempt-list">
-        {sessions.map((session) => (
-          <button className="attempt-row" key={session.id} type="button" onClick={() => onOpen(session.id)}>
-            <span><strong>{session.studentName || 'Estudiante no informado'}</strong><small>{session.studentDocumentLast4 || 'Documento no informado'} · {session.quizName || `Cuestionario ${session.quizId}`}</small></span>
-            <span><small>{formatDate(session.createdAt)} · {session.deviceMode}</small><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span></span>
-          </button>
-        ))}
+      <div className="attempt-table-wrap">
+        <table className="attempt-table">
+          <thead>
+            <tr>
+              <th scope="col">Estudiante</th>
+              <th scope="col">Cuestionario</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Modalidad</th>
+              <th scope="col">Nivel de control</th>
+              <th scope="col">Riesgo</th>
+              <th scope="col">Alertas</th>
+              <th scope="col"><span className="visually-hidden">Acción</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((session) => (
+              <tr key={session.id}>
+                <td data-label="Estudiante">
+                  <button className="attempt-open" type="button" onClick={() => onOpen(session.id)}>
+                    <strong>{session.studentName || 'Estudiante no informado'}</strong>
+                    <small>{session.studentDocumentLast4 || 'Documento no informado'}</small>
+                  </button>
+                </td>
+                <td data-label="Cuestionario">{session.quizName || `Cuestionario ${session.quizId}`}</td>
+                <td data-label="Fecha">{formatDate(session.createdAt)}</td>
+                <td data-label="Modalidad">{session.deviceMode}</td>
+                <td data-label="Nivel de control"><span className="badge">{controlLevelLabel(session.controlLevel)}</span></td>
+                <td data-label="Riesgo"><span className="badge">{riskSummaryLabel(session.riskCategory)}{session.riskScore != null ? ` · ${session.riskScore}/100` : ''}</span></td>
+                <td data-label="Alertas"><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span></td>
+                <td data-label="Acción"><button className="text-button report-button" type="button" onClick={() => onOpen(session.id)}>Ver reporte de fraude</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <div className="pagination" aria-label="Paginación de intentos">
         <button type="button" disabled={filters.page <= 1 || loading} onClick={() => onFiltersChange({ ...filters, page: filters.page - 1 })}>Anterior</button>
@@ -41,4 +68,17 @@ export default function AttemptList({ course, filters, loading, pagination, sess
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString() : 'Fecha no informada';
+}
+
+function controlLevelLabel(level) {
+  if (level === 'low') return 'Bajo';
+  if (level === 'high') return 'Alto';
+  return 'Medio';
+}
+
+function riskSummaryLabel(category) {
+  if (category === 'high_risk') return 'Riesgo alto';
+  if (category === 'medium_risk') return 'Riesgo medio';
+  if (category === 'observation') return 'Observación';
+  return 'Normal';
 }

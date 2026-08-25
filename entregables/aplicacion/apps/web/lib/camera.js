@@ -19,10 +19,30 @@ export function stopCamera(stream) {
 
 export function captureReference(video) {
   const canvas = document.createElement('canvas');
-  const width = Math.min(video.videoWidth || 640, 640);
-  const ratio = width / (video.videoWidth || 640);
-  canvas.width = width;
-  canvas.height = Math.round((video.videoHeight || 480) * ratio);
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.72);
+  const sourceWidth = video.videoWidth || 640;
+  const sourceHeight = video.videoHeight || 480;
+  const qualities = [0.72, 0.58, 0.45, 0.32];
+  let width = Math.min(sourceWidth, 640);
+  let capture;
+
+  while (width >= 320) {
+    const ratio = width / sourceWidth;
+    canvas.width = Math.round(width);
+    canvas.height = Math.round(sourceHeight * ratio);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    for (const quality of qualities) {
+      capture = canvas.toDataURL('image/jpeg', quality);
+      if (dataUrlByteSize(capture) <= 200 * 1024) {
+        return capture;
+      }
+    }
+    width = Math.floor(width * 0.8);
+  }
+
+  return capture && dataUrlByteSize(capture) <= 200 * 1024 ? capture : null;
+}
+
+function dataUrlByteSize(dataUrl) {
+  const base64 = dataUrl.split(',')[1] ?? '';
+  return Math.floor(base64.length * 3 / 4);
 }

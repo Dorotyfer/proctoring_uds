@@ -10,6 +10,22 @@ const eventTypes = {
   'out-of-frame': 'face_out_of_frame'
 };
 
+const alertTypes = new Set([
+  'camera_interrupted',
+  'face_absent',
+  'multiple_faces',
+  'face_out_of_frame',
+  'identity_check_failed',
+  'liveness_check_failed',
+  'page_visibility_changed',
+  'network_disconnected',
+  'seb_event'
+]);
+
+export function isAlertType(type) {
+  return alertTypes.has(type);
+}
+
 export function createFaceStateTracker() {
   let count = 0;
   let current = 'valid';
@@ -32,6 +48,22 @@ export function createFaceStateTracker() {
         return eventTypes[next];
       }
       return null;
+    }
+  };
+}
+
+export function createAttentionSignalTracker(cooldownMs = 10000) {
+  let lastExpression = null;
+  let lastEmittedAt = null;
+
+  return {
+    update(signal, now = Date.now()) {
+      if (!signal || now - (lastEmittedAt ?? -Infinity) < cooldownMs && signal.expression === lastExpression) {
+        return null;
+      }
+      lastExpression = signal.expression;
+      lastEmittedAt = now;
+      return 'attention_signal';
     }
   };
 }

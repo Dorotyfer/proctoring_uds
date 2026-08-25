@@ -3,6 +3,7 @@ const severityByType = {
   face_absent: 'medium',
   face_out_of_frame: 'low',
   identity_check_failed: 'high',
+  biometric_mismatch: 'high',
   liveness_check_failed: 'high',
   multiple_faces: 'high',
   network_disconnected: 'low',

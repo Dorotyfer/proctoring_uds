@@ -18,6 +18,8 @@ const SessionListQuery = PaginationQuery.extend({
   dateTo: z.string().date().optional()
 });
 
+const BiometricProfileQuery = PaginationQuery;
+
 export async function registerPanelRoutes(app, options) {
   app.get('/v1/panel/sso', async (request, reply) => {
     const parsed = z.object({
@@ -46,6 +48,32 @@ export async function registerPanelRoutes(app, options) {
   app.post('/v1/panel/logout', async (request, reply) => {
     reply.clearCookie(options.cookieName, cookieOptions(options));
     return reply.code(204).send();
+  });
+
+  app.post('/v1/panel/biometric-profiles/:moodleUserId/reset', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    if (!options.authService.canManageBiometrics(request.panelUser)) {
+      return reply.code(403).send({ error: 'Biometric profile management capability required' });
+    }
+    const moodleUserId = z.string().trim().min(1).max(255).safeParse(request.params.moodleUserId);
+    if (!moodleUserId.success || !options.biometricProfileRepository) {
+      return reply.code(400).send({ error: 'Invalid biometric profile request' });
+    }
+    const biometric = await options.biometricProfileRepository.reset(
+      moodleUserId.data,
+      request.panelUser.moodleUserId
+    );
+    return biometric ? { biometric } : reply.code(404).send({ error: 'Biometric profile not found' });
+  });
+
+  app.get('/v1/panel/biometric-profiles', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    if (!options.authService.canManageBiometrics(request.panelUser)) {
+      return reply.code(403).send({ error: 'Biometric profile management capability required' });
+    }
+    const query = BiometricProfileQuery.safeParse(request.query);
+    if (!query.success || !options.biometricProfileRepository?.list) {
+      return reply.code(400).send({ error: 'Invalid biometric profile query' });
+    }
+    return options.biometricProfileRepository.list(query.data);
   });
 
   app.get('/v1/panel/me', { preHandler: authorizePanel(options) }, async (request) => ({
@@ -100,6 +128,13 @@ export async function registerPanelRoutes(app, options) {
     } else {
       session.evidence = session.evidence.filter((item) => item.kind === 'alert');
     }
+    if (options.riskAnalysisService) {
+      session.risk = options.riskAnalysisService.analyzeSessionRisk({
+        alerts: session.alerts,
+        controlLevel: session.controlLevel,
+        events: session.events
+      });
+    }
     return { session };
   });
 
@@ -141,7 +176,8 @@ export async function registerPanelRoutes(app, options) {
       moodleUserId: request.panelUser.moodleUserId,
       aud: 'proctoring-evidence'
     }, { expiresIn: '60s' });
-    return { url: `${options.apiOrigin}/v1/panel/evidence/${evidence.id}/content?accessToken=${encodeURIComponent(accessToken)}` };
+    const apiBaseUrl = options.apiBaseUrl ?? options.apiOrigin;
+    return { url: `${apiBaseUrl}/v1/panel/evidence/${evidence.id}/content?accessToken=${encodeURIComponent(accessToken)}` };
   });
 
   app.get('/v1/panel/evidence/:evidenceId/content', async (request, reply) => {
@@ -190,11 +226,20 @@ function authorizePanel(options) {
 function cookieOptions(options) {
   return {
     httpOnly: true,
-    path: '/v1/panel',
+    path: panelCookiePath(options),
     sameSite: options.secureCookies ? 'none' : 'lax',
     secure: options.secureCookies,
     maxAge: 1800
   };
+}
+
+function panelCookiePath(options) {
+  try {
+    const pathname = new URL(options.apiBaseUrl ?? options.apiOrigin).pathname.replace(/\/$/, '');
+    return `${pathname}/v1/panel`.replace('//', '/');
+  } catch {
+    return '/v1/panel';
+  }
 }
 
 function isCourseAuthorized(courseId, claims, authService) {

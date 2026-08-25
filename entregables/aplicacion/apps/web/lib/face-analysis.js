@@ -3,6 +3,8 @@ const eyeLandmarks = {
   right: [362, 385, 387, 263, 373, 380]
 };
 
+export const BIOMETRIC_DESCRIPTOR_LENGTH = 1024;
+
 function distance(first, second) {
   return Math.hypot(first[0] - second[0], first[1] - second[1]);
 }
@@ -35,6 +37,37 @@ export function describeFaceState(result, frame) {
     && width * height >= frame.width * frame.height * 0.08;
 
   return { face: faces[0], state: framed ? 'valid' : 'out-of-frame' };
+}
+
+export function describeAttentionSignal(result) {
+  const faces = result?.face ?? [];
+  if (faces.length !== 1 || !Array.isArray(faces[0].expressions)) {
+    return null;
+  }
+
+  const expression = faces[0].expressions
+    .filter((item) => typeof item?.name === 'string' && Number.isFinite(item.score))
+    .sort((left, right) => right.score - left.score)[0];
+  if (!expression) {
+    return null;
+  }
+
+  return {
+    signal: 'facial_expression_observation',
+    expression: expression.name,
+    confidence: Math.round(expression.score * 100) / 100
+  };
+}
+
+export function extractFaceEmbedding(face) {
+  const embedding = face?.embedding;
+  if (!Array.isArray(embedding) || embedding.length !== BIOMETRIC_DESCRIPTOR_LENGTH) {
+    return null;
+  }
+  if (embedding.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+    return null;
+  }
+  return embedding.slice();
 }
 
 export function createLivenessChallenge(random = crypto.getRandomValues(new Uint32Array(1))[0]) {
