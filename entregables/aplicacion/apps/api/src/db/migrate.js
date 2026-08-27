@@ -39,6 +39,7 @@ try {
       await connection.query(sql);
       await ensureReferenceEvidenceForeignKey(connection, file);
       await ensureIncidentEvidenceForeignKey(connection, file);
+      await ensureIdentityDocumentEvidenceForeignKey(connection, file);
       await connection.execute(
         'INSERT INTO proctoring_schema_migrations (name) VALUES (?)',
         [file]
@@ -95,5 +96,27 @@ async function ensureReferenceEvidenceForeignKey(connection, migrationFile) {
     ALTER TABLE proctoring_sessions
     ADD CONSTRAINT proctoring_sessions_reference_evidence_fk
     FOREIGN KEY (reference_evidence_id) REFERENCES proctoring_evidence(id)
+  `);
+}
+
+async function ensureIdentityDocumentEvidenceForeignKey(connection, migrationFile) {
+  if (migrationFile !== '010_identity_document_evidence.sql') {
+    return;
+  }
+
+  const [constraints] = await connection.execute(`
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_schema = DATABASE()
+      AND table_name = 'proctoring_sessions'
+      AND constraint_name = 'proctoring_sessions_identity_document_evidence_fk'
+  `);
+  if (constraints.length > 0) {
+    return;
+  }
+
+  await connection.query(`
+    ALTER TABLE proctoring_sessions
+    ADD CONSTRAINT proctoring_sessions_identity_document_evidence_fk
+    FOREIGN KEY (identity_document_evidence_id) REFERENCES proctoring_evidence(id)
   `);
 }

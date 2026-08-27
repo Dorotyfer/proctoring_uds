@@ -262,7 +262,7 @@ test('lists biometric profiles only for institutional managers', async () => {
   await app.close();
 });
 
-test('returns only alert evidence in an authorized session detail', async () => {
+test('returns alert and identity document evidence in an authorized session detail', async () => {
   const app = await buildPanelApp({
     repository: {
       async getSession() {
@@ -270,6 +270,7 @@ test('returns only alert evidence in an authorized session detail', async () => 
           id: '11111111-1111-4111-8111-111111111111',
           evidence: [
             { id: 'identity-evidence', kind: 'identity' },
+            { id: 'identity-document-evidence', kind: 'identity_document' },
             { id: 'interval-evidence', kind: 'interval' },
             { id: 'alert-evidence', kind: 'alert' }
           ]
@@ -286,7 +287,10 @@ test('returns only alert evidence in an authorized session detail', async () => 
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json().session.evidence, [{ id: 'alert-evidence', kind: 'alert' }]);
+  assert.deepEqual(response.json().session.evidence, [
+    { id: 'identity-document-evidence', kind: 'identity_document' },
+    { id: 'alert-evidence', kind: 'alert' }
+  ]);
   await app.close();
 });
 
@@ -335,7 +339,7 @@ test('returns an explainable risk analysis in session detail', async () => {
   await app.close();
 });
 
-test('refuses direct access to non-alert evidence', async () => {
+test('allows direct access only to alert and identity document evidence', async () => {
   const accessed = [];
   const app = await buildPanelApp({
     evidenceRepository: {
@@ -343,7 +347,7 @@ test('refuses direct access to non-alert evidence', async () => {
         return {
           id,
           courseId: 'course-a',
-          kind: id.startsWith('2222') ? 'interval' : 'alert'
+          kind: id.startsWith('2222') ? 'interval' : id.startsWith('5555') ? 'identity_document' : 'alert'
         };
       },
       async audit(input) {
@@ -354,6 +358,7 @@ test('refuses direct access to non-alert evidence', async () => {
   const cookie = await signInPanel(app, [PANEL_CAPABILITIES.institution, PANEL_CAPABILITIES.viewEvidence]);
   const intervalId = '22222222-2222-4222-8222-222222222222';
   const alertId = '33333333-3333-4333-8333-333333333333';
+  const identityDocumentId = '55555555-5555-4555-8555-555555555555';
 
   const interval = await app.inject({
     method: 'POST',
@@ -365,14 +370,20 @@ test('refuses direct access to non-alert evidence', async () => {
     url: `/v1/panel/evidence/${alertId}/access`,
     headers: { cookie }
   });
+  const identityDocument = await app.inject({
+    method: 'POST',
+    url: `/v1/panel/evidence/${identityDocumentId}/access`,
+    headers: { cookie }
+  });
 
   assert.equal(interval.statusCode, 404);
   assert.equal(alert.statusCode, 200);
-  assert.deepEqual(accessed, [alertId]);
+  assert.equal(identityDocument.statusCode, 200);
+  assert.deepEqual(accessed, [alertId, identityDocumentId]);
   await app.close();
 });
 
-test('refuses a signed content token when the evidence is not an alert', async () => {
+test('refuses a signed content token when the evidence kind is not viewable', async () => {
   let contentReads = 0;
   const evidenceId = '44444444-4444-4444-8444-444444444444';
   const app = await buildPanelApp({
@@ -401,6 +412,42 @@ test('refuses a signed content token when the evidence is not an alert', async (
 
   assert.equal(response.statusCode, 404);
   assert.equal(contentReads, 0);
+  await app.close();
+});
+
+test('serves identity document content without caching and audits the download', async () => {
+  const audits = [];
+  const evidenceId = '66666666-6666-4666-8666-666666666666';
+  const app = await buildPanelApp({
+    evidenceRepository: {
+      async findById() {
+        return { id: evidenceId, kind: 'identity_document', contentType: 'image/jpeg' };
+      },
+      async audit(input) {
+        audits.push(input);
+      }
+    },
+    evidenceService: {
+      async readAuthorized() {
+        return Buffer.from('private document photo');
+      }
+    }
+  });
+  const accessToken = app.jwt.sign({
+    evidenceId,
+    moodleUserId: 'reviewer-1',
+    aud: 'proctoring-evidence'
+  }, { expiresIn: '60s' });
+
+  const response = await app.inject({
+    method: 'GET',
+    url: `/v1/panel/evidence/${evidenceId}/content?accessToken=${encodeURIComponent(accessToken)}`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['cache-control'], 'private, no-store');
+  assert.equal(audits[0].action, 'download');
+  assert.equal(audits[0].evidenceId, evidenceId);
   await app.close();
 });
 

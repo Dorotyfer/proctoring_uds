@@ -69,6 +69,30 @@ test('uses a stable event-linked object key for incident evidence', async () => 
   assert.equal(storedInput.eventId, 'event-1');
 });
 
+test('stores a document identity photo with its own evidence kind', async () => {
+  let storedInput;
+  const service = createEvidenceService({
+    encryptionService: createEvidenceEncryptionService(Buffer.alloc(32, 7)),
+    objectStorage: {
+      async put() {},
+      async delete() {}
+    },
+    repository: {
+      async create(input) {
+        storedInput = input;
+        return { id: 'document-evidence', ...input };
+      }
+    },
+    retentionDays: 30
+  });
+
+  const result = await service.storeIdentityDocument('session-1', Buffer.from('jpeg-binary'));
+
+  assert.equal(result.kind, 'identity_document');
+  assert.equal(storedInput.kind, 'identity_document');
+  assert.match(storedInput.objectKey, /^session-1\/identity_document\/.+\.enc$/);
+});
+
 test('purges expired objects and creates a retention audit record', async () => {
   const actions = [];
   const evidence = {

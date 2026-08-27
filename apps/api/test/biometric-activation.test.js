@@ -4,10 +4,18 @@ import test from 'node:test';
 import { buildApp } from '../src/app.js';
 import { BiometricConsentRequiredError } from '../src/services/biometric-profile-service.js';
 import { BIOMETRIC_DESCRIPTOR_LENGTH } from '../src/services/biometric-matching-service.js';
+import { IdentityDocumentRequiredError } from '../src/services/session-service.js';
 
 const sessionId = 'e3d9cce1-a5b8-4bfe-88e1-68a57475266d';
 const jpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9]).toString('base64')}`;
 const samples = Array.from({ length: 3 }, () => Array.from({ length: BIOMETRIC_DESCRIPTOR_LENGTH }, () => 0.1));
+
+function jpegDataUrl(byteLength) {
+  const buffer = Buffer.alloc(byteLength, 0);
+  buffer.set([0xff, 0xd8, 0xff], 0);
+  buffer.set([0xff, 0xd9], byteLength - 2);
+  return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+}
 
 function createApp(overrides = {}) {
   const session = {
@@ -72,7 +80,148 @@ test('returns the account biometric state without exposing a descriptor', async 
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json().session.biometric, { enrollmentVersion: null, state: 'unregistered' });
+  assert.equal(response.json().session.identityDocumentRequired, true);
   assert.equal(JSON.stringify(response.json()).includes('embedding'), false);
+  await app.close();
+});
+
+test('returns a retryable response when document evidence is required', async () => {
+  const { app } = await createApp({
+    sessionService: {
+      async getActive() {
+        return {
+          expiresAt: '2099-08-19T10:30:00.000Z',
+          id: sessionId,
+          identityDocumentEvidenceId: null,
+          moodleUserId: 'student-1',
+          status: 'pending'
+        };
+      },
+      async activate() {
+        throw new IdentityDocumentRequiredError('Identity document photo is required');
+      }
+    }
+  });
+  const token = app.jwt.sign({ aud: 'proctoring-browser', sessionId });
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${sessionId}/activate`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      biometricConsentAccepted: true,
+      biometricSamples: samples,
+      identityPassed: true,
+      livenessChallenge: ['blink', 'turn-left'],
+      livenessPassed: true,
+      referenceCapture: jpeg
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, 'identity_document_required');
+  await app.close();
+});
+
+test('rejects document payloads that are not real JPEG images before activation', async () => {
+  let activations = 0;
+  const { app } = await createApp({
+    sessionService: {
+      async getActive() {
+        return {
+          expiresAt: '2099-08-19T10:30:00.000Z',
+          id: sessionId,
+          moodleUserId: 'student-1',
+          status: 'pending'
+        };
+      },
+      async activate() {
+        activations += 1;
+      }
+    }
+  });
+  const token = app.jwt.sign({ aud: 'proctoring-browser', sessionId });
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${sessionId}/activate`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      biometricConsentAccepted: true,
+      biometricSamples: samples,
+      documentCapture: `data:image/jpeg;base64,${Buffer.from('not-a-jpeg').toString('base64')}`,
+      identityPassed: true,
+      livenessChallenge: ['blink', 'turn-left'],
+      livenessPassed: true,
+      referenceCapture: jpeg
+    }
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(activations, 0);
+  await app.close();
+});
+
+test('accepts reference and document JPEGs at the 200 KB boundary in one activation', async () => {
+  const { app } = await createApp();
+  const token = app.jwt.sign({ aud: 'proctoring-browser', sessionId });
+  const boundaryJpeg = jpegDataUrl(200 * 1024);
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${sessionId}/activate`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      biometricConsentAccepted: true,
+      biometricSamples: samples,
+      documentCapture: boundaryJpeg,
+      identityPassed: true,
+      livenessChallenge: ['blink', 'turn-left'],
+      livenessPassed: true,
+      referenceCapture: boundaryJpeg
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  await app.close();
+});
+
+test('rejects a document JPEG larger than 200 KB', async () => {
+  let activations = 0;
+  const { app } = await createApp({
+    sessionService: {
+      async getActive() {
+        return {
+          expiresAt: '2099-08-19T10:30:00.000Z',
+          id: sessionId,
+          moodleUserId: 'student-1',
+          status: 'pending'
+        };
+      },
+      async activate() {
+        activations += 1;
+      }
+    }
+  });
+  const token = app.jwt.sign({ aud: 'proctoring-browser', sessionId });
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/v1/sessions/${sessionId}/activate`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      biometricConsentAccepted: true,
+      biometricSamples: samples,
+      documentCapture: jpegDataUrl(200 * 1024 + 1),
+      identityPassed: true,
+      livenessChallenge: ['blink', 'turn-left'],
+      livenessPassed: true,
+      referenceCapture: jpeg
+    }
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(activations, 0);
   await app.close();
 });
 

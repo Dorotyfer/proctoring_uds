@@ -57,10 +57,23 @@ export function createSessionRepository(databaseUrl) {
       const [result] = await pool.execute(`
         UPDATE proctoring_sessions
         SET status = 'active', prepared_at = UTC_TIMESTAMP(3),
-          reference_evidence_id = ?, liveness_challenge = ?
+          reference_evidence_id = ?, identity_document_evidence_id = ?, liveness_challenge = ?
         WHERE id = ? AND status IN ('pending', 'active') AND expires_at > UTC_TIMESTAMP(3)
-      `, [preparation.evidenceId, JSON.stringify(preparation.livenessChallenge), id]);
+      `, [
+        preparation.evidenceId,
+        preparation.identityDocumentEvidenceId ?? null,
+        JSON.stringify(preparation.livenessChallenge),
+        id
+      ]);
       return result.affectedRows === 0 ? null : findById(pool, id);
+    },
+    async attachIdentityDocumentEvidence(id, evidenceId) {
+      const [result] = await pool.execute(`
+        UPDATE proctoring_sessions
+        SET identity_document_evidence_id = ?
+        WHERE id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP(3)
+      `, [evidenceId, id]);
+      return result.affectedRows > 0;
     },
     async close() {
       await pool.end();
@@ -83,7 +96,8 @@ function sessionSelect(condition) {
     SELECT sessions.id, sessions.moodle_user_id, sessions.moodle_course_id, sessions.moodle_quiz_id,
       moodle_attempt_id, device_mode, status, issued_at, expires_at, created_at,
       quiz_name, student_name, student_document, device_mode, control_level,
-      liveness_challenge, courses.name AS course_name
+      liveness_challenge, reference_evidence_id, identity_document_evidence_id,
+      courses.name AS course_name
     FROM proctoring_sessions sessions
     LEFT JOIN proctoring_courses courses ON courses.moodle_course_id = sessions.moodle_course_id
     WHERE ${condition}
@@ -107,6 +121,7 @@ function mapSession(row) {
     issuedAt: toIsoDate(row.issued_at),
     expiresAt: toIsoDate(row.expires_at),
     createdAt: toIsoDate(row.created_at),
+    identityDocumentEvidenceId: row.identity_document_evidence_id ?? null,
     livenessChallenge: parseJson(row.liveness_challenge)
   };
 }

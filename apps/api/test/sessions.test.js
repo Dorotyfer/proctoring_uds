@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildApp } from '../src/app.js';
-import { createSessionService } from '../src/services/session-service.js';
+import {
+  createSessionService,
+  IdentityDocumentRequiredError
+} from '../src/services/session-service.js';
 
 const payload = {
   moodleUserId: 'student-1',
@@ -163,4 +166,134 @@ test('exposes only browser-safe session data and activates after successful chec
   assert.equal(activation.statusCode, 200);
   assert.equal(activation.json().session.status, 'active');
   await app.close();
+});
+
+test('requires document evidence before creating a biometric enrollment', async () => {
+  let enrollments = 0;
+  let evidenceWrites = 0;
+  const service = createSessionService({
+    async findById() {
+      return {
+        expiresAt: '2099-08-19T10:30:00.000Z',
+        id: 'session-1',
+        identityDocumentEvidenceId: null,
+        moodleUserId: 'student-1',
+        status: 'pending'
+      };
+    }
+  }, {
+    async storeIdentityDocument() {
+      evidenceWrites += 1;
+    }
+  }, {
+    async getStatus() {
+      return { enrollmentVersion: null, state: 'unregistered' };
+    },
+    async enrollOrVerify() {
+      enrollments += 1;
+    }
+  });
+
+  await assert.rejects(
+    service.activate('session-1', { biometricSamples: [], referenceCapture: Buffer.from('reference') }),
+    IdentityDocumentRequiredError
+  );
+  assert.equal(evidenceWrites, 0);
+  assert.equal(enrollments, 0);
+});
+
+test('stores and attaches document evidence before enrolling and activating a session', async () => {
+  const calls = [];
+  const service = createSessionService({
+    async findById() {
+      return {
+        expiresAt: '2099-08-19T10:30:00.000Z',
+        id: 'session-1',
+        identityDocumentEvidenceId: null,
+        moodleUserId: 'student-1',
+        status: 'pending'
+      };
+    },
+    async attachIdentityDocumentEvidence(id, evidenceId) {
+      calls.push(['attach-document', id, evidenceId]);
+    },
+    async activate(id, preparation) {
+      calls.push(['activate', id, preparation.identityDocumentEvidenceId]);
+      return { id, status: 'active' };
+    }
+  }, {
+    async storeIdentity() {
+      calls.push(['store-reference']);
+      return { id: 'reference-evidence' };
+    },
+    async storeIdentityDocument(id, capture) {
+      calls.push(['store-document', id, capture.toString()]);
+      return { id: 'document-evidence' };
+    }
+  }, {
+    async getStatus() {
+      return { enrollmentVersion: null, state: 'unregistered' };
+    },
+    async enrollOrVerify() {
+      calls.push(['enroll']);
+      return { status: 'enrolled' };
+    }
+  });
+
+  const result = await service.activate('session-1', {
+    biometricConsentAccepted: true,
+    biometricSamples: [],
+    documentCapture: Buffer.from('document'),
+    livenessChallenge: ['blink', 'turn-left'],
+    referenceCapture: Buffer.from('reference')
+  });
+
+  assert.equal(result.session.status, 'active');
+  assert.deepEqual(calls, [
+    ['store-document', 'session-1', 'document'],
+    ['attach-document', 'session-1', 'document-evidence'],
+    ['enroll'],
+    ['store-reference'],
+    ['activate', 'session-1', 'document-evidence']
+  ]);
+});
+
+test('reuses attached document evidence and does not require another photo on retry', async () => {
+  let documentWrites = 0;
+  const service = createSessionService({
+    async findById() {
+      return {
+        expiresAt: '2099-08-19T10:30:00.000Z',
+        id: 'session-1',
+        identityDocumentEvidenceId: 'existing-document',
+        moodleUserId: 'student-1',
+        status: 'pending'
+      };
+    },
+    async activate(id) {
+      return { id, status: 'active' };
+    }
+  }, {
+    async storeIdentity() {
+      return { id: 'reference-evidence' };
+    },
+    async storeIdentityDocument() {
+      documentWrites += 1;
+    }
+  }, {
+    async getStatus() {
+      return { enrollmentVersion: null, state: 'unregistered' };
+    },
+    async enrollOrVerify() {
+      return { status: 'enrolled' };
+    }
+  });
+
+  await service.activate('session-1', {
+    biometricSamples: [],
+    livenessChallenge: ['blink', 'turn-left'],
+    referenceCapture: Buffer.from('reference')
+  });
+
+  assert.equal(documentWrites, 0);
 });

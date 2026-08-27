@@ -30,6 +30,9 @@ export function createEvidenceService(options) {
     async storeIdentity(sessionId, buffer) {
       return storeCapture(sessionId, 'identity', buffer);
     },
+    async storeIdentityDocument(sessionId, buffer) {
+      return storeCapture(sessionId, 'identity_document', buffer);
+    },
     async storeCapture(sessionId, kind, buffer, captureOptions = {}) {
       return storeCapture(sessionId, kind, buffer, captureOptions);
     },

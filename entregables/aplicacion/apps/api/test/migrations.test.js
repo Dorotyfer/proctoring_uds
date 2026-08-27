@@ -40,7 +40,13 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   assert.match(biometricMigration.sql, /proctoring_biometric_audit/);
   assert.match(biometricMigration.sql, /biometric_mismatch/);
 
+  const identityDocumentMigration = migrations.find((migration) => migration.file === '010_identity_document_evidence.sql');
+  assert.ok(identityDocumentMigration);
+  assert.match(identityDocumentMigration.sql, /identity_document_evidence_id CHAR\(36\) NULL/);
+  assert.match(identityDocumentMigration.sql, /identity_document/);
+
   const migrator = await fs.readFile(path.join(migrationsDirectory, '../migrate.js'), 'utf8');
   assert.match(migrator, /information_schema\.table_constraints/);
   assert.match(migrator, /proctoring_evidence_event_fk/);
+  assert.match(migrator, /proctoring_sessions_identity_document_evidence_fk/);
 });

@@ -11,7 +11,7 @@ import { registerSessionRoutes } from './routes/sessions.js';
 
 export async function buildApp(options) {
   const app = fastify({
-    bodyLimit: 384 * 1024,
+    bodyLimit: 768 * 1024,
     logger: options.logger ?? true,
     requestIdHeader: 'x-correlation-id'
   });
