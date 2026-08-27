@@ -12,7 +12,7 @@ const labels = {
   'turn-right': 'Gira el rostro a la derecha'
 };
 
-export function LivenessCheck({ challenge, detector, onComplete, onFailure, stream }) {
+export function LivenessCheck({ challenge, detector, onComplete, onFailure, stream, totalSteps = 3 }) {
   const completed = useRef(false);
   const videoRef = useRef(null);
   const stepState = useRef({});
@@ -76,7 +76,7 @@ export function LivenessCheck({ challenge, detector, onComplete, onFailure, stre
 
   return (
     <section>
-      <p className="eyebrow">Paso 3 de 3</p>
+      <p className="eyebrow">Paso 3 de {totalSteps}</p>
       <h1>Prueba de vida</h1>
       <ul className="steps">
         {challenge.map((step, index) => (

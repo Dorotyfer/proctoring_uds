@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CameraCheck } from '@/components/CameraCheck';
 import { BiometricConsent } from '@/components/BiometricConsent';
 import { EnrollmentCheck } from '@/components/EnrollmentCheck';
+import { IdentityDocumentCapture } from '@/components/IdentityDocumentCapture';
 import { LivenessCheck } from '@/components/LivenessCheck';
 import { SessionMonitor } from '@/components/SessionMonitor';
 import { stopCamera } from '@/lib/camera';
@@ -23,6 +24,7 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [detector, setDetector] = useState(null);
   const [error, setError] = useState(null);
+  const [identityDocumentRequired, setIdentityDocumentRequired] = useState(false);
   const [session, setSession] = useState(null);
   const [stage, setStage] = useState('loading');
   const [stream, setStream] = useState(null);
@@ -52,6 +54,7 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
         const { session: loaded } = await getSession(token);
         if (cancelled) return;
         setSession(loaded);
+        setIdentityDocumentRequired(loaded.identityDocumentRequired === true);
         if (loaded.status === 'active') {
           setStage('ready');
         } else if (['unregistered', 'revoked'].includes(loaded.biometric?.state)) {
@@ -104,12 +107,13 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
     setError(message);
   }, [incidentBuffer, stream]);
 
-  const livenessComplete = useCallback(async () => {
+  const activatePreparedSession = useCallback(async (documentCapture = null) => {
     setStage('activating');
     try {
       const result = await activateSession(token, {
         biometricConsentAccepted: consentAccepted,
         biometricSamples,
+        documentCapture: documentCapture ?? undefined,
         identityPassed: true,
         livenessChallenge: challenge,
         livenessPassed: true,
@@ -122,6 +126,16 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
       setError('No se pudo validar la preparación. Inténtalo nuevamente desde Moodle.');
     }
   }, [biometricSamples, capture, challenge, consentAccepted, token]);
+
+  const livenessComplete = useCallback(() => {
+    if (identityDocumentRequired) {
+      setStage('identity-document');
+      return;
+    }
+    void activatePreparedSession();
+  }, [activatePreparedSession, identityDocumentRequired]);
+
+  const totalSteps = identityDocumentRequired ? 4 : 3;
 
   if (error) {
     return <main className="shell"><section className="card"><h1>Validación interrumpida</h1><p className="error-text">{error}</p></section></main>;
@@ -148,6 +162,7 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
           <CameraCheck
             onFailure={() => void reportFailure('camera_interrupted', 'No fue posible acceder a la cámara.')}
             onReady={cameraReady}
+            totalSteps={totalSteps}
           />
         )}
         {stage === 'enrollment' && (
@@ -156,6 +171,7 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
             onComplete={enrollmentComplete}
             onFailure={(failureCapture) => void reportFailure('identity_check_failed', 'No se pudo obtener una captura válida.', failureCapture)}
             stream={stream}
+            totalSteps={totalSteps}
           />
         )}
         {stage === 'liveness' && (
@@ -164,6 +180,13 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
             detector={detector}
             onComplete={livenessComplete}
             onFailure={(failureCapture) => void reportFailure('liveness_check_failed', 'La prueba de vida no se completó a tiempo.', failureCapture)}
+            stream={stream}
+            totalSteps={totalSteps}
+          />
+        )}
+        {stage === 'identity-document' && (
+          <IdentityDocumentCapture
+            onConfirm={(documentCapture) => void activatePreparedSession(documentCapture)}
             stream={stream}
           />
         )}

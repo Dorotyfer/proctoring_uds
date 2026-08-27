@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { requestCamera } from '@/lib/camera';
 
-export function CameraCheck({ onFailure, onReady }) {
+export function CameraCheck({ onFailure, onReady, totalSteps = 3 }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +23,7 @@ export function CameraCheck({ onFailure, onReady }) {
 
   return (
     <section>
-      <p className="eyebrow">Paso 1 de 3</p>
+      <p className="eyebrow">Paso 1 de {totalSteps}</p>
       <h1>Comprobar cámara</h1>
       <p>La cámara se procesa localmente y no se graba vídeo continuo.</p>
       {error && <p className="error-text" role="alert">{error}</p>}

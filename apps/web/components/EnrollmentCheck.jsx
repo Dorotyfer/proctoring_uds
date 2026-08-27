@@ -13,7 +13,7 @@ const messages = {
   valid: 'Mantén la posición mientras realizamos la captura.'
 };
 
-export function EnrollmentCheck({ detector, onComplete, onFailure, stream }) {
+export function EnrollmentCheck({ detector, onComplete, onFailure, stream, totalSteps = 3 }) {
   const completed = useRef(false);
   const videoRef = useRef(null);
   const validFrames = useRef(0);
@@ -67,7 +67,7 @@ export function EnrollmentCheck({ detector, onComplete, onFailure, stream }) {
 
   return (
     <section>
-      <p className="eyebrow">Paso 2 de 3</p>
+      <p className="eyebrow">Paso 2 de {totalSteps}</p>
       <h1>Captura de referencia</h1>
       <video autoPlay className="video" muted playsInline ref={videoRef} />
       <p aria-live="polite">{messages[state]}</p>

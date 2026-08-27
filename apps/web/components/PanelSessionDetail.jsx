@@ -1,6 +1,7 @@
 export default function PanelSessionDetail({ canManageBiometrics, session, onBack, onEvidence, onResetBiometrics, onReview }) {
   const incidentEvidence = session.evidence.filter((item) => item.kind === 'alert' &&
     !session.alerts.some((alert) => alert.evidenceId === item.id));
+  const identityDocumentEvidence = session.evidence.find((item) => item.kind === 'identity_document');
 
   return (
     <section className="panel-content panel-detail" aria-labelledby="session-title">
@@ -18,6 +19,15 @@ export default function PanelSessionDetail({ canManageBiometrics, session, onBac
         <button className="text-button" type="button" onClick={() => onResetBiometrics(session.moodleUserId)}>
           Exigir nueva inscripción biométrica
         </button>
+      ) : null}
+      {identityDocumentEvidence ? (
+        <section className="identity-document-evidence" aria-labelledby="identity-document-evidence-title">
+          <h3 id="identity-document-evidence-title">Verificación de identidad</h3>
+          <p>Foto tomada durante el registro biométrico con el documento junto al rostro.</p>
+          <button className="text-button" type="button" onClick={() => onEvidence(identityDocumentEvidence.id)}>
+            Ver foto con documento de identidad
+          </button>
+        </section>
       ) : null}
       {session.risk ? <BehaviorAnalysis risk={session.risk} /> : null}
       <h3>Alertas</h3>

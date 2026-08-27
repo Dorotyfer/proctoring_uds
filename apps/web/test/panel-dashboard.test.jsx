@@ -169,6 +169,30 @@ it('renders only evidence marked as an incident', async () => {
   expect(screen.queryByText(/interval/)).not.toBeInTheDocument();
 });
 
+it('shows identity document evidence separately from incident images', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '7', name: 'Derecho' }] }))
+    .mockResolvedValueOnce(response({ sessions: [{ id: 'session-1', studentName: 'Ana Pérez', alerts: [] }] }))
+    .mockResolvedValueOnce(response({
+      session: {
+        id: 'session-1',
+        studentName: 'Ana Pérez',
+        alerts: [],
+        events: [],
+        evidence: [{ id: 'document-evidence', kind: 'identity_document', created_at: '2026-08-20T20:01:00.000Z' }]
+      }
+    })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana Pérez/ }));
+
+  expect(await screen.findByRole('heading', { name: 'Verificación de identidad' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ver foto con documento de identidad' })).toBeInTheDocument();
+  expect(screen.getByText('No hay imágenes asociadas a incidencias.')).toBeInTheDocument();
+});
+
 it('shows linked incident evidence with valid and invalid review actions', async () => {
   const requests = [
     response({ user: profile }),
