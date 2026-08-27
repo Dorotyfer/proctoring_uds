@@ -12,7 +12,7 @@ Moodle conserva usuarios, cursos, cuestionarios, intentos y calificaciones. La A
 
 La aplicación web externa realiza la detección facial localmente con `@vladmandic/human`. Después de la preparación, Moodle incorpora un iframe que conserva la cámara y el monitor durante el intento. Moodle confirma el estado activo mediante la API antes de mostrar el cuestionario; no confía en parámetros enviados por el navegador.
 
-La captura de referencia se cifra con AES-256-GCM antes de salir hacia el almacenamiento de objetos. MariaDB conserva únicamente metadatos, claves de objeto, IV, etiqueta de autenticación, vencimiento y auditoría. La evidencia se entrega mediante una URL de API de 60 segundos que descifra el objeto autorizado en memoria; el bucket nunca es público.
+La captura de referencia y la foto con documento exigida durante el alta o reinscripción se cifran con AES-256-GCM antes de salir hacia el almacenamiento de objetos. MariaDB conserva únicamente metadatos, claves de objeto, IV, etiqueta de autenticación, vencimiento y auditoría. La foto con documento y las incidencias autorizadas se entregan mediante una URL de API de 60 segundos que descifra el objeto en memoria; el bucket nunca es público.
 
 Moodle firma un token SSO de dos minutos con usuario, nombre visible, capacidades y cursos autorizados. La API lo intercambia por una cookie HTTP-only de 30 minutos. Todas las consultas del panel filtran por `moodle_course_id` en SQL, salvo la capacidad institucional explícita. La capacidad biométrica se verifica por separado.
 
