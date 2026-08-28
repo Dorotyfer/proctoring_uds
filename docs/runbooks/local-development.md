@@ -42,6 +42,8 @@ Los modelos de `@vladmandic/human` se copian automáticamente desde la dependenc
 - `pnpm pilot:load` ejecuta el flujo activo contra una API configurada; no lo ejecute contra producción durante exámenes.
 - `pnpm test` incluye la prueba vertical y las recuperaciones automatizadas.
 - `pnpm web:build` valida el frontend de estudiante y panel.
+- `scripts/verify-product.ps1` ejecuta la verificación reproducible en Windows; `scripts/verify-product.sh` hace lo mismo en Linux.
+- El despliegue productivo sin Docker está documentado en `docs/runbooks/blue-green.md` y usa los archivos de `deploy/systemd` y `deploy/nginx`.
 
 La ejecución institucional completa está en `docs/runbooks/mvp-acceptance.md`.
 

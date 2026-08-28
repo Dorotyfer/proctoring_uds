@@ -21,4 +21,4 @@ La API no consulta la base de datos de Moodle. La comunicación usa HTTPS y una 
 - Herramientas de fase 7 para prueba vertical, fixtures deterministas, recuperación, carga de 1.000 sesiones y aceptación del piloto.
 - Pendiente antes del uso real: ejecutar la matriz de dispositivos, PHPUnit y pruebas contra MariaDB/S3/Moodle institucionales.
 
-Consulte [el plan del MVP](docs/mvp-implementation-plan.md), [la arquitectura](docs/architecture.md), [la instalación en Moodle](docs/runbooks/moodle-installation.md) y [la aceptación del piloto](docs/runbooks/mvp-acceptance.md).
+Consulte la [guía absoluta de desarrollo](docs/GUIA_ABSOLUTA_PRODUCTO_FINAL.md), [la arquitectura](docs/architecture.md), [la instalación en Moodle](docs/runbooks/moodle-installation.md) y [la aceptación del piloto](docs/runbooks/mvp-acceptance.md).
