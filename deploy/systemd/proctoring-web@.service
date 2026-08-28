@@ -1,0 +1,19 @@
+[Unit]
+Description=Proctoring UDS web (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proctoring
+Group=proctoring
+WorkingDirectory=/opt/proctoring/releases/%i
+EnvironmentFile=/etc/proctoring/web-%i.env
+ExecStart=/usr/bin/pnpm --filter @proctoring/web start
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
