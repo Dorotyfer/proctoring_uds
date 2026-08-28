@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+import { calculateRiskScore } from '../services/risk-score-service.js';
+import { createCsvReport } from '../services/report-service.js';
+
 const ReviewInput = z.object({
   status: z.enum(['reviewed', 'dismissed']),
   note: z.string().trim().max(2000).default('')
@@ -77,6 +80,17 @@ export async function registerPanelRoutes(app, options) {
     return options.biometricProfileRepository.list(query.data);
   });
 
+  app.get('/v1/panel/biometric-profiles/:moodleUserId/versions', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    if (!options.authService.canManageBiometrics(request.panelUser)) {
+      return reply.code(403).send({ error: 'Biometric profile management capability required' });
+    }
+    const userId = z.string().trim().min(1).max(255).safeParse(request.params.moodleUserId);
+    if (!userId.success || typeof options.biometricProfileRepository?.listVersions !== 'function') {
+      return reply.code(400).send({ error: 'Invalid biometric profile request' });
+    }
+    return { versions: await options.biometricProfileRepository.listVersions(userId.data) };
+  });
+
   app.get('/v1/panel/me', { preHandler: authorizePanel(options) }, async (request) => ({
     user: {
       moodleUserId: request.panelUser.moodleUserId,
@@ -109,10 +123,71 @@ export async function registerPanelRoutes(app, options) {
     );
   });
 
+  app.get('/v1/panel/courses/:courseId/report.csv', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    const courseId = z.string().trim().min(1).max(255).safeParse(request.params.courseId);
+    const query = SessionListQuery.safeParse(request.query);
+    if (!courseId.success || !query.success || !isCourseAuthorized(courseId.data, request.panelUser, options.authService)) {
+      return reply.code(404).send({ error: 'Course not found' });
+    }
+    if (typeof options.repository.exportCourseSessions !== 'function') {
+      return reply.code(503).send({ error: 'Report service unavailable' });
+    }
+    const rows = await options.repository.exportCourseSessions(
+      courseId.data,
+      options.authService.scope(request.panelUser),
+      query.data
+    );
+    return reply
+      .header('Cache-Control', 'private, no-store')
+      .header('Content-Disposition', `attachment; filename="proctoring-${courseId.data}.csv"`)
+      .type('text/csv; charset=utf-8')
+      .send(createCsvReport(rows));
+  });
+
   app.get('/v1/panel/sessions', { preHandler: authorizePanel(options) }, async (request) => {
     return {
       sessions: await options.repository.listSessions(options.authService.scope(request.panelUser))
     };
+  });
+
+  app.get('/v1/panel/sessions/:sessionId/risk', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    const id = z.string().uuid().safeParse(request.params.sessionId);
+    if (!id.success) {
+      return reply.code(400).send({ error: 'Invalid session identifier' });
+    }
+    const session = await options.repository.getSession(id.data, options.authService.scope(request.panelUser));
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const risk = calculateRiskScore(session.events, Date.now(), { version: 'risk-v1' });
+    await options.riskScoreService?.persist?.(id.data, risk);
+    return risk;
+  });
+
+  app.get('/v1/panel/sessions/:sessionId/stream', { preHandler: authorizePanel(options) }, async (request, reply) => {
+    const id = z.string().uuid().safeParse(request.params.sessionId);
+    if (!id.success || !options.realtimeHub) {
+      return reply.code(id.success ? 503 : 400).send({ error: 'Session stream unavailable' });
+    }
+    const session = await options.repository.getSession(id.data, options.authService.scope(request.panelUser));
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Cache-Control': 'no-cache, no-store',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream',
+      'X-Accel-Buffering': 'no'
+    });
+    const write = (event) => reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event.data ?? {})}\n\n`);
+    const unsubscribe = options.realtimeHub.subscribe(id.data, write);
+    const keepalive = setInterval(() => reply.raw.write(': keepalive\n\n'), 15000);
+    const cleanup = () => {
+      clearInterval(keepalive);
+      unsubscribe();
+    };
+    request.raw.once('close', cleanup);
   });
 
   app.get('/v1/panel/sessions/:sessionId', { preHandler: authorizePanel(options) }, async (request, reply) => {

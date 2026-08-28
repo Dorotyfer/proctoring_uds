@@ -76,7 +76,9 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
     setStream(cameraStream);
     setStage('loading-model');
     try {
-      setDetector(await createHumanDetector());
+      setDetector(await createHumanDetector({
+        environmentEnabled: process.env.NEXT_PUBLIC_ENABLE_ENVIRONMENT_ANALYSIS === 'true'
+      }));
       setStage('enrollment');
     } catch {
       stopCamera(cameraStream);
@@ -141,7 +143,15 @@ export function PreparationFlow({ monitorMode, returnUrl, token }) {
     return <main className="shell"><section className="card"><h1>Validación interrumpida</h1><p className="error-text">{error}</p></section></main>;
   }
   if (stage === 'ready' && monitorMode) {
-    return <SessionMonitor biometricStatus={biometricStatus} deviceMode={session?.deviceMode} detector={detector} stream={stream} token={token} />;
+    return <SessionMonitor
+      biometricStatus={biometricStatus}
+      deviceMode={session?.deviceMode}
+      deviceModePolicy={session?.deviceModePolicy}
+      detector={detector}
+      policy={session?.policySnapshot}
+      stream={stream}
+      token={token}
+    />;
   }
 
   return (

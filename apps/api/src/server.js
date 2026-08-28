@@ -6,11 +6,13 @@ import { createEventRepository } from './repositories/event-repository.js';
 import { createEvidenceRepository } from './repositories/evidence-repository.js';
 import { createPanelRepository } from './repositories/panel-repository.js';
 import { createSessionRepository } from './repositories/session-repository.js';
+import { createRiskScoreRepository } from './repositories/risk-score-repository.js';
 import { createAlertService } from './services/alert-service.js';
 import { createEvidenceEncryptionService } from './services/evidence-encryption-service.js';
 import { createEvidenceService } from './services/evidence-service.js';
 import { createBiometricEncryptionService } from './services/biometric-encryption-service.js';
 import { createBiometricProfileService } from './services/biometric-profile-service.js';
+import { createBiometricMonitorService } from './services/biometric-monitor-service.js';
 import { createEventService } from './services/event-service.js';
 import { createIncidentService } from './services/incident-service.js';
 import { createSessionService } from './services/session-service.js';
@@ -18,6 +20,8 @@ import { analyzeSessionRisk } from './services/session-risk-analysis-service.js'
 import { createObjectStorageService } from './services/object-storage-service.js';
 import { createPanelAuthService } from './services/panel-auth-service.js';
 import { createResilientObjectStorage } from './services/resilient-object-storage.js';
+import { createRealtimeHub } from './services/realtime-hub.js';
+import { calculateRiskScore } from './services/risk-score-service.js';
 
 const config = loadConfig();
 const repository = createSessionRepository(config.databaseUrl);
@@ -26,7 +30,9 @@ const alertRepository = createAlertRepository(config.databaseUrl);
 const biometricProfileRepository = createBiometricProfileRepository(config.databaseUrl);
 const evidenceRepository = createEvidenceRepository(config.databaseUrl);
 const panelRepository = createPanelRepository(config.databaseUrl);
+const riskScoreRepository = createRiskScoreRepository(config.databaseUrl);
 const alertService = createAlertService(alertRepository);
+const realtimeHub = createRealtimeHub();
 const evidenceService = createEvidenceService({
   encryptionService: createEvidenceEncryptionService(config.evidenceEncryptionKey),
   objectStorage: createResilientObjectStorage(createObjectStorageService(config.objectStorage)),
@@ -43,10 +49,21 @@ const sessionService = createSessionService(
   evidenceService,
   biometricService
 );
-const eventService = createEventService(sessionService, eventRepository, alertService);
+const eventService = createEventService(
+  sessionService,
+  eventRepository,
+  alertService,
+  (sessionId, event) => realtimeHub.publish(sessionId, event)
+);
 const incidentService = createIncidentService(eventService, evidenceRepository, evidenceService);
+const biometricMonitorService = createBiometricMonitorService({
+  biometricService,
+  incidentService,
+  sessionService
+});
 const app = await buildApp({
   biometricService,
+  biometricMonitorService,
   eventService,
   evidenceService,
   healthService: { check: () => repository.ping() },
@@ -63,6 +80,11 @@ const app = await buildApp({
     evidenceService,
     biometricProfileRepository,
     repository: panelRepository,
+    realtimeHub,
+    riskScoreService: {
+      calculateRiskScore,
+      persist: (sessionId, risk) => riskScoreRepository.create(sessionId, risk)
+    },
     riskAnalysisService: { analyzeSessionRisk },
     secureCookies: config.apiOrigin.startsWith('https://'),
     webOrigin: config.webOrigin
@@ -78,6 +100,7 @@ async function stop() {
   await evidenceRepository.close();
   await eventRepository.close();
   await panelRepository.close();
+  await riskScoreRepository.close();
   await repository.close();
 }
 

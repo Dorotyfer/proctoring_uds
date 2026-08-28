@@ -20,19 +20,34 @@ export function createSessionRepository(databaseUrl) {
           ON DUPLICATE KEY UPDATE name = VALUES(name), updated_at = VALUES(updated_at)
         `, [input.moodleCourseId, input.courseName]);
         await connection.execute(`
+          INSERT INTO proctoring_policies (
+            id, moodle_course_id, moodle_quiz_id, version, policy_json, actor_id
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE id = id
+        `, [
+          crypto.randomUUID(), input.moodleCourseId, input.moodleQuizId,
+          input.policyVersion, JSON.stringify(input.policySnapshot), 'moodle-integration'
+        ]);
+        await connection.execute(`
           INSERT INTO proctoring_sessions (
             id, moodle_user_id, moodle_course_id, moodle_quiz_id, moodle_attempt_id,
-            quiz_name, student_name, student_document, device_mode, control_level, issued_at, expires_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            quiz_name, student_name, student_document, device_mode, device_mode_policy,
+            policy_version, policy_snapshot, control_level, issued_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
             quiz_name = VALUES(quiz_name),
             student_name = VALUES(student_name),
             student_document = VALUES(student_document),
+            device_mode = VALUES(device_mode),
+            device_mode_policy = VALUES(device_mode_policy),
+            policy_version = VALUES(policy_version),
+            policy_snapshot = VALUES(policy_snapshot),
             control_level = VALUES(control_level)
         `, [
           crypto.randomUUID(), input.moodleUserId, input.moodleCourseId,
           input.moodleQuizId, input.moodleAttemptId, input.quizName,
-          input.studentName, input.studentDocument, input.deviceMode, input.controlLevel,
+          input.studentName, input.studentDocument, input.deviceMode, input.deviceModePolicy,
+          input.policyVersion, JSON.stringify(input.policySnapshot), input.controlLevel,
           toMysqlDate(input.issuedAt), toMysqlDate(input.expiresAt)
         ]);
         await connection.commit();
@@ -94,7 +109,8 @@ async function findById(pool, id) {
 function sessionSelect(condition) {
   return `
     SELECT sessions.id, sessions.moodle_user_id, sessions.moodle_course_id, sessions.moodle_quiz_id,
-      moodle_attempt_id, device_mode, status, issued_at, expires_at, created_at,
+      moodle_attempt_id, device_mode, device_mode_policy, policy_version, policy_snapshot,
+      status, issued_at, expires_at, created_at,
       quiz_name, student_name, student_document, device_mode, control_level,
       liveness_challenge, reference_evidence_id, identity_document_evidence_id,
       courses.name AS course_name
@@ -116,6 +132,9 @@ function mapSession(row) {
     studentName: row.student_name,
     studentDocument: row.student_document,
     deviceMode: row.device_mode,
+    deviceModePolicy: row.device_mode_policy ?? row.device_mode,
+    policyVersion: row.policy_version ?? 'quiz-policy-3',
+    policySnapshot: parseJson(row.policy_snapshot) ?? { version: 'quiz-policy-3', signals: [] },
     controlLevel: row.control_level ?? 'medium',
     status: row.status,
     issuedAt: toIsoDate(row.issued_at),

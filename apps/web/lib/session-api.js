@@ -45,6 +45,14 @@ export function sendSessionEvent(token, event) {
   });
 }
 
+export function sendBiometricCheck(token, check) {
+  const sessionId = readSessionId(token);
+  return request(`/v1/sessions/${sessionId}/biometric-checks`, token, {
+    body: JSON.stringify(check),
+    method: 'POST'
+  });
+}
+
 export function sendEvidence(token, kind, capture) {
   const sessionId = readSessionId(token);
   return request(`/v1/sessions/${sessionId}/evidence`, token, {

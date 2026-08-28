@@ -27,6 +27,13 @@ const EvidenceInput = z.object({
   capture: z.string().regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/)
 });
 
+const BiometricMonitorInput = z.object({
+  clientCheckId: z.string().uuid(),
+  occurredAt: z.string().datetime(),
+  samples: z.array(z.array(z.number().finite()).length(1024)).length(3),
+  capture: z.string().regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/).optional()
+}).strict();
+
 export function authorizeBrowserSession(request, reply) {
   const parsedId = z.string().uuid().safeParse(request.params.sessionId);
   if (!parsedId.success) {
@@ -65,6 +72,9 @@ export async function registerBrowserSessionRoutes(app, options) {
         biometric,
         id: session.id,
         deviceMode: session.deviceMode,
+        deviceModePolicy: session.deviceModePolicy,
+        policySnapshot: session.policySnapshot,
+        policyVersion: session.policyVersion,
         status: session.status,
         expiresAt: session.expiresAt,
         identityDocumentRequired: Boolean(options.biometricService) &&
@@ -168,6 +178,44 @@ export async function registerBrowserSessionRoutes(app, options) {
         : undefined,
       session: { id: session.id, status: session.status }
     };
+  });
+
+  app.post('/v1/sessions/:sessionId/biometric-checks', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.code(401).send({ error: 'Invalid or expired browser token' });
+    }
+    const sessionId = authorizeBrowserSession(request, reply);
+    if (!sessionId) {
+      return reply;
+    }
+    if (!options.biometricMonitorService) {
+      return reply.code(503).send({ error: 'Continuous biometric monitoring is unavailable' });
+    }
+    const parsed = BiometricMonitorInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid continuous biometric check payload' });
+    }
+    let capture = null;
+    if (parsed.data.capture) {
+      capture = Buffer.from(parsed.data.capture.split(',')[1], 'base64');
+      if (!isJpegBuffer(capture) || capture.length > 200 * 1024) {
+        return reply.code(400).send({ error: 'Monitor capture must be a JPEG not exceeding 200 KB' });
+      }
+    }
+
+    try {
+      return await options.biometricMonitorService.check(sessionId, {
+        ...parsed.data,
+        capture
+      });
+    } catch (error) {
+      if (error?.name === 'BiometricMonitorSessionUnavailableError') {
+        return reply.code(409).send({ error: 'Session is not active' });
+      }
+      throw error;
+    }
   });
 
   app.post('/v1/sessions/:sessionId/evidence', async (request, reply) => {

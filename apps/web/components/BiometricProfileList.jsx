@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/localization';
+
 export default function BiometricProfileList({ profiles, filters, loading, pagination, onBack, onFiltersChange, onReset, onRetry }) {
   function submit(event) {
     event.preventDefault();
@@ -56,5 +58,5 @@ export default function BiometricProfileList({ profiles, filters, loading, pagin
 }
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleString() : 'Nunca';
+  return value ? formatDateTime(value) : 'Nunca';
 }

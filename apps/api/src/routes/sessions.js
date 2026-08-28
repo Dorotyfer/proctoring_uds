@@ -48,6 +48,8 @@ export async function registerSessionRoutes(app, options) {
         sessionId: session.id,
         moodleAttemptId: session.moodleAttemptId,
         deviceMode: session.deviceMode,
+        deviceModePolicy: session.deviceModePolicy,
+        policyVersion: session.policyVersion,
         aud: 'proctoring-browser'
       }, { expiresIn: '15m' })
     };

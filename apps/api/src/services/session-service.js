@@ -1,12 +1,19 @@
 import { CreateSessionInput } from '@proctoring/contracts';
 
+import { validatePolicy } from './policy-service.js';
+
 export class IdentityDocumentRequiredError extends Error {}
 export class IdentityDocumentUnavailableError extends Error {}
 
 export function createSessionService(repository, evidenceService, biometricService = null) {
   return {
     async create(input) {
-      return repository.create(CreateSessionInput.parse(input));
+      const parsed = CreateSessionInput.parse(input);
+      return repository.create({
+        ...parsed,
+        policySnapshot: validatePolicy(parsed.policySnapshot),
+        policyVersion: parsed.policySnapshot.version
+      });
     },
     async getActive(id) {
       const session = await repository.findById(id);

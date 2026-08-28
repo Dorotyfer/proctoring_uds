@@ -67,6 +67,16 @@ class quizaccess_proctoring extends quiz_access_rule_base {
         ]);
         $mform->setDefault('proctoringcontrollevel', 'medium');
         $mform->hideIf('proctoringcontrollevel', 'proctoringenabled', 'eq', 0);
+
+        $mform->addElement('text', 'proctoringpolicyversion', get_string('policyversion', 'quizaccess_proctoring'));
+        $mform->setType('proctoringpolicyversion', PARAM_ALPHANUMEXT);
+        $mform->setDefault('proctoringpolicyversion', 'quiz-policy-3');
+        $mform->hideIf('proctoringpolicyversion', 'proctoringenabled', 'eq', 0);
+
+        $mform->addElement('textarea', 'proctoringpolicyjson', get_string('policyjson', 'quizaccess_proctoring'));
+        $mform->setType('proctoringpolicyjson', PARAM_RAW);
+        $mform->setDefault('proctoringpolicyjson', '{"version":"quiz-policy-3","signals":[]}');
+        $mform->hideIf('proctoringpolicyjson', 'proctoringenabled', 'eq', 0);
     }
 
     public static function save_settings($quiz) {
@@ -79,7 +89,9 @@ class quizaccess_proctoring extends quiz_access_rule_base {
             'failurepolicy' => $quiz->proctoringfailurepolicy ?? 'block',
             'controllevel' => in_array($quiz->proctoringcontrollevel ?? 'medium', ['low', 'medium', 'high'], true)
                 ? $quiz->proctoringcontrollevel
-                : 'medium'
+                : 'medium',
+            'policyversion' => trim((string)($quiz->proctoringpolicyversion ?? 'quiz-policy-3')) ?: 'quiz-policy-3',
+            'policyjson' => trim((string)($quiz->proctoringpolicyjson ?? '')) ?: '{"version":"quiz-policy-3","signals":[]}'
         ];
         $existing = $DB->get_record('quizaccess_proctoring', ['quizid' => $quiz->id]);
 

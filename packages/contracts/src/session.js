@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
+import { DEFAULT_PROCTORING_POLICY, ProctoringPolicy } from './policy.js';
+
 export const DeviceMode = z.enum(['browser', 'seb']);
+
+export const DeviceModePolicy = z.enum(['browser', 'seb', 'either']);
 
 export const ControlLevel = z.enum(['low', 'medium', 'high']);
 
@@ -16,6 +20,9 @@ export const CreateSessionInput = z.object({
   studentName: z.string().trim().min(1).max(255),
   studentDocument: z.string().trim().min(1).max(100).nullable(),
   deviceMode: DeviceMode,
+  deviceModePolicy: DeviceModePolicy.default('either'),
+  policyVersion: z.string().trim().min(1).max(64).default('quiz-policy-3'),
+  policySnapshot: ProctoringPolicy.default(DEFAULT_PROCTORING_POLICY),
   controlLevel: ControlLevel.default('medium'),
   issuedAt: z.string().datetime(),
   expiresAt: z.string().datetime()

@@ -41,6 +41,7 @@ export async function buildApp(options) {
   });
   await app.register(registerBrowserSessionRoutes, {
     biometricService: options.biometricService,
+    biometricMonitorService: options.biometricMonitorService,
     evidenceService: options.evidenceService,
     incidentService: options.incidentService,
     requireHttps: options.requireHttps ?? false,

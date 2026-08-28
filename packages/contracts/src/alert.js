@@ -10,5 +10,12 @@ export const AlertType = z.enum([
   'liveness_check_failed',
   'page_visibility_changed',
   'network_disconnected',
-  'seb_event'
+  'seb_event',
+  'biometric_monitor_mismatch',
+  'environment_intrusion',
+  'facial_pattern_detected',
+  'window_blur',
+  'fullscreen_exit',
+  'page_unload',
+  'device_mode_mismatch'
 ]);

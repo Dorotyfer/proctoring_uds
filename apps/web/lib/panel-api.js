@@ -23,6 +23,59 @@ export function createPanelApi(apiUrl) {
       `/v1/panel/courses/${encodeURIComponent(courseId)}/sessions?${queryString(filters)}`
     ),
     getSession: (sessionId) => request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`),
+    subscribeSession(sessionId, onUpdate) {
+      let stopped = false;
+      let source = null;
+      let polling = null;
+
+      const poll = async () => {
+        if (stopped) return;
+        try {
+          const payload = await request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`);
+          if (!stopped) onUpdate(payload.session);
+        } catch {
+          // The visible session remains available while the next retry is pending.
+        }
+      };
+      const startPolling = () => {
+        if (polling === null) {
+          void poll();
+          polling = window.setInterval(() => void poll(), 5000);
+        }
+      };
+
+      if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
+        source = new window.EventSource(
+          `${apiUrl}/v1/panel/sessions/${encodeURIComponent(sessionId)}/stream`,
+          { withCredentials: true }
+        );
+        source.addEventListener('session.updated', () => void poll());
+        source.onerror = () => {
+          source.close();
+          startPolling();
+        };
+      } else {
+        startPolling();
+      }
+
+      return () => {
+        stopped = true;
+        source?.close();
+        if (polling !== null) window.clearInterval(polling);
+      };
+    },
+    reportCsv: async (courseId, filters) => {
+      const response = await fetch(
+        `${apiUrl}/v1/panel/courses/${encodeURIComponent(courseId)}/report.csv?${queryString(filters)}`,
+        { credentials: 'include' }
+      );
+      if (!response.ok) {
+        const error = new Error(`panel_api_${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      return response.text();
+    },
     reviewAlert: (alertId, status, note) => request(`/v1/panel/alerts/${encodeURIComponent(alertId)}/review`, {
       method: 'POST',
       body: JSON.stringify({ status, note })

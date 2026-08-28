@@ -1,4 +1,6 @@
-export default function AttemptList({ course, filters, loading, pagination, sessions, onBack, onFiltersChange, onOpen, onRetry }) {
+import { deviceModeLabel, formatDateTime } from '@/lib/localization';
+
+export default function AttemptList({ course, filters, loading, pagination, sessions, onBack, onExport, onFiltersChange, onOpen, onRetry }) {
   function update(name, value) {
     onFiltersChange({ ...filters, [name]: value, page: 1 });
   }
@@ -11,7 +13,7 @@ export default function AttemptList({ course, filters, loading, pagination, sess
           <p className="eyebrow">Curso</p>
           <h2 id="attempts-title">{course.name || `Curso ${course.id}`}</h2>
         </div>
-        <span>{pagination.total ?? 0} intentos</span>
+        <div className="button-row"><span>{pagination.total ?? 0} intentos</span>{onExport ? <button className="text-button" type="button" onClick={onExport}>Exportar CSV</button> : null}</div>
       </div>
       <div className="attempt-filters">
         <label>Buscar<input value={filters.query} onChange={(event) => update('query', event.target.value)} placeholder="Estudiante, documento o cuestionario" /></label>
@@ -46,8 +48,8 @@ export default function AttemptList({ course, filters, loading, pagination, sess
                   </button>
                 </td>
                 <td data-label="Cuestionario">{session.quizName || `Cuestionario ${session.quizId}`}</td>
-                <td data-label="Fecha">{formatDate(session.createdAt)}</td>
-                <td data-label="Modalidad">{session.deviceMode}</td>
+                <td data-label="Fecha">{formatDateTime(session.createdAt)}</td>
+                <td data-label="Modalidad">{deviceModeLabel(session.deviceMode)}</td>
                 <td data-label="Nivel de control"><span className="badge">{controlLevelLabel(session.controlLevel)}</span></td>
                 <td data-label="Riesgo"><span className="badge">{riskSummaryLabel(session.riskCategory)}{session.riskScore != null ? ` · ${session.riskScore}/100` : ''}</span></td>
                 <td data-label="Alertas"><span className={session.openAlertCount > 0 ? 'badge warning' : 'badge'}>{session.openAlertCount} abiertas</span></td>
@@ -64,10 +66,6 @@ export default function AttemptList({ course, filters, loading, pagination, sess
       </div>
     </section>
   );
-}
-
-function formatDate(value) {
-  return value ? new Date(value).toLocaleString() : 'Fecha no informada';
 }
 
 function controlLevelLabel(level) {

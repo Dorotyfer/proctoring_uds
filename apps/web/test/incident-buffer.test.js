@@ -14,10 +14,11 @@ it('keeps an incident after a failed send and removes it only after confirmation
     if (shouldFail) {
       throw new Error('offline');
     }
-    return { incident: { eventId: 'event-1', evidenceId: 'evidence-1', status: 'open' } };
+    return { incident: { alertId: 'alert-1', eventId: 'event-1', evidenceId: 'evidence-1', status: 'open' } };
   });
   const storage = createMemoryStorage();
-  const buffer = createIncidentBuffer('session-1', sender, storage);
+  let currentTime = 0;
+  const buffer = createIncidentBuffer('session-1', sender, storage, { now: () => currentTime });
   const incident = {
     capture: 'data:image/jpeg;base64,anBlZw==',
     clientEventId: 'e3d9cce1-a5b8-4bfe-88e1-68a57475266d',
@@ -31,6 +32,7 @@ it('keeps an incident after a failed send and removes it only after confirmation
   expect(await buffer.size()).toBe(1);
 
   shouldFail = false;
+  currentTime = 1000;
   expect(await buffer.flush()).toBe(0);
   expect(await buffer.size()).toBe(0);
   expect(records).toHaveLength(2);
@@ -45,10 +47,10 @@ it('reloads incidents from persistent storage before flushing', async () => {
     occurredAt: '2026-08-21T12:00:00.000Z',
     type: 'camera_interrupted'
   };
-  const first = createIncidentBuffer('session-1', async () => ({}), storage);
+  const first = createIncidentBuffer('session-1', async () => ({ incident: { alertId: 'a', eventId: 'e' } }), storage);
   await first.enqueue(incident);
 
-  const sender = vi.fn(async () => ({}));
+  const sender = vi.fn(async () => ({ incident: { alertId: 'a', eventId: 'e' } }));
   const reloaded = createIncidentBuffer('session-1', sender, storage);
 
   expect(await reloaded.size()).toBe(1);

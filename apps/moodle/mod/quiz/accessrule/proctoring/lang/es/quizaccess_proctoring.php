@@ -19,3 +19,5 @@ $string['controllevel'] = 'Nivel de control';
 $string['controllevellow'] = 'Bajo';
 $string['controllevelmedium'] = 'Medio';
 $string['controllevelhigh'] = 'Alto';
+$string['policyversion'] = 'Versión de política';
+$string['policyjson'] = 'Reglas de señales (JSON)';

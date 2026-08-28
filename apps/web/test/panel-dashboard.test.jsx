@@ -141,7 +141,7 @@ it('shows control level and explainable behavior risk for an attempt', async () 
   expect(screen.getByRole('region', { name: 'Cronología de eventos' })).toBeInTheDocument();
   expect(screen.getByText('Cambio de visibilidad de la página')).toBeInTheDocument();
   expect(screen.getByText('Observación de expresión facial')).toBeInTheDocument();
-  expect(screen.getByText('Expresión observada: neutral · confianza 91%')).toBeInTheDocument();
+  expect(screen.getByText('Expresión observada: Neutral · confianza 91%')).toBeInTheDocument();
 });
 
 it('renders only evidence marked as an incident', async () => {

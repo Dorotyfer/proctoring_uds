@@ -12,7 +12,15 @@ export const EventType = z.enum([
   'network_disconnected',
   'network_reconnected',
   'seb_event',
-  'attention_signal'
+  'attention_signal',
+  'biometric_monitor_mismatch',
+  'environment_intrusion',
+  'facial_pattern_detected',
+  'window_blur',
+  'window_focus',
+  'fullscreen_exit',
+  'page_unload',
+  'device_mode_mismatch'
 ]);
 
 export const SessionEventInput = z.object({

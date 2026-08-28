@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CreateSessionInput, SessionEventInput } from '../src/index.js';
+import { CreateSessionInput, ProctoringPolicy, SessionEventInput } from '../src/index.js';
 
 const validSession = {
   moodleUserId: 'student-1',
@@ -18,8 +18,11 @@ const validSession = {
 };
 
 test('accepts the supported device modes', () => {
-  assert.equal(CreateSessionInput.parse(validSession).controlLevel, 'medium');
-  assert.equal(CreateSessionInput.parse(validSession).deviceMode, 'browser');
+  const parsed = CreateSessionInput.parse(validSession);
+  assert.equal(parsed.controlLevel, 'medium');
+  assert.equal(parsed.deviceModePolicy, 'either');
+  assert.deepEqual(parsed.policySnapshot, { version: 'quiz-policy-3', signals: [] });
+  assert.equal(parsed.deviceMode, 'browser');
   assert.equal(CreateSessionInput.parse({ ...validSession, deviceMode: 'seb' }).deviceMode, 'seb');
   assert.equal(CreateSessionInput.parse({ ...validSession, controlLevel: 'high' }).controlLevel, 'high');
 });
@@ -65,5 +68,55 @@ test('accepts only the event whitelist', () => {
     clientEventId: '56cc96a8-2ff1-41ca-9917-dd967c297319',
     type: 'unknown',
     occurredAt: '2026-08-19T10:10:00.000Z'
+  }));
+});
+
+test('accepts a bounded, closed policy contract', () => {
+  const policy = ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{
+      type: 'multiple_faces',
+      count: 2,
+      windowSeconds: 30,
+      severity: 'high',
+      capture: true,
+      studentMessage: 'Se detectaron varios rostros.'
+    }]
+  });
+
+  assert.equal(policy.version, 'quiz-policy-3');
+  assert.equal(policy.signals[0].type, 'multiple_faces');
+});
+
+test('rejects duplicate, unknown, out-of-range and executable policy values', () => {
+  const baseRule = {
+    type: 'multiple_faces',
+    count: 2,
+    windowSeconds: 30,
+    severity: 'high',
+    capture: false,
+    studentMessage: 'Mensaje válido'
+  };
+
+  assert.throws(() => ProctoringPolicy.parse({ version: 'quiz-policy-3', signals: [baseRule, baseRule] }));
+  assert.throws(() => ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{ ...baseRule, type: 'DROP TABLE proctoring_events' }]
+  }));
+  assert.throws(() => ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{ ...baseRule, count: 0 }]
+  }));
+  assert.throws(() => ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{ ...baseRule, windowSeconds: 901 }]
+  }));
+  assert.throws(() => ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{ ...baseRule, studentMessage: 'x'.repeat(241) }]
+  }));
+  assert.throws(() => ProctoringPolicy.parse({
+    version: 'quiz-policy-3',
+    signals: [{ ...baseRule, expression: 'process.exit()' }]
   }));
 });

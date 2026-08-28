@@ -1,13 +1,13 @@
-export async function createHumanDetector() {
+export async function createHumanDetector(options = {}) {
   const { default: Human } = await import('@/generated/human.esm.js');
-  return createDetectorWithFallback(Human);
+  return createDetectorWithFallback(Human, options);
 }
 
 export function getModelBasePath(pathname = '') {
   return pathname.startsWith('/proctoring/') ? '/proctoring/models' : '/models';
 }
 
-export async function createDetectorWithFallback(Human) {
+export async function createDetectorWithFallback(Human, { environmentEnabled = false } = {}) {
   let lastError;
   const modelBasePath = getModelBasePath(
     typeof window === 'undefined' ? '' : window.location.pathname
@@ -27,7 +27,7 @@ export async function createDetectorWithFallback(Human) {
         gesture: { enabled: false },
         hand: { enabled: false },
         modelBasePath,
-        object: { enabled: false }
+        object: { enabled: environmentEnabled }
       });
       await human.load();
       return human;

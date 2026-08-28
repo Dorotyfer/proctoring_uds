@@ -80,6 +80,33 @@ export function createPanelRepository(databaseUrl) {
       `, [...filters.whereValues, ...filters.havingValues, query.pageSize, offset(query)]);
       return pagedResult('sessions', rows.map(mapSessionSummary), Number(countRows[0].total), query);
     },
+    async exportCourseSessions(courseId, scope, query) {
+      const filters = sessionListFilters(courseId, scope, query);
+      if (filters.empty) return [];
+      const [rows] = await pool.execute(`
+        SELECT sessions.id, sessions.moodle_course_id, sessions.student_name,
+          sessions.status, sessions.device_mode, sessions.control_level, sessions.created_at,
+          COUNT(DISTINCT alerts.id) AS alert_count,
+          COUNT(DISTINCT CASE WHEN alerts.status = 'open' THEN alerts.id END) AS open_alert_count,
+          GROUP_CONCAT(DISTINCT events.type) AS event_types,
+          GROUP_CONCAT(DISTINCT alerts.type) AS alert_types
+        FROM proctoring_sessions sessions
+        LEFT JOIN proctoring_alerts alerts ON alerts.session_id = sessions.id
+        LEFT JOIN proctoring_events events ON events.session_id = sessions.id
+        ${filters.whereSql}
+        GROUP BY sessions.id
+        ${filters.havingSql}
+        ORDER BY sessions.created_at DESC
+        LIMIT 10001
+      `, [...filters.whereValues, ...filters.havingValues]);
+      return rows.map((row) => {
+        const summary = mapSessionSummary(row);
+        return {
+          ...summary,
+          studentName: row.student_name ?? null
+        };
+      });
+    },
     async listSessions(scope) {
       const filter = courseScopeFilter(scope, 'WHERE');
       if (filter.empty) {
@@ -127,7 +154,7 @@ export function createPanelRepository(databaseUrl) {
       const [events, alerts, evidence] = await Promise.all([
         pool.execute('SELECT id, type, occurred_at, metadata FROM proctoring_events WHERE session_id = ? ORDER BY occurred_at', [id]),
         pool.execute(`
-          SELECT alerts.id, alerts.event_id, alerts.type, alerts.severity, alerts.status,
+          SELECT alerts.id, alerts.event_id, alerts.type, alerts.severity, alerts.status, alerts.capture_status,
             alerts.created_at, alerts.reviewed_at, alerts.reviewed_by, alerts.review_note,
             evidence.id AS evidence_id, events.metadata AS event_metadata
           FROM proctoring_alerts alerts
@@ -166,10 +193,17 @@ export function createPanelRepository(databaseUrl) {
           metadata: parseJson(event.metadata)
         })),
         alerts: alerts[0].map((alert) => {
-          const { event_metadata: eventMetadata, evidence_id: evidenceId, ...alertData } = alert;
+          const {
+            capture_status: captureStatus,
+            event_metadata: eventMetadata,
+            evidence_id: evidenceId,
+            ...alertData
+          } = alert;
           return {
             ...alertData,
-            captureStatus: mapIncidentCaptureStatus(parseJson(eventMetadata)?.captureStatus, evidenceId),
+            captureStatus: evidenceId
+              ? 'available'
+              : captureStatus ?? mapIncidentCaptureStatus(parseJson(eventMetadata)?.captureStatus, evidenceId),
             evidenceId: evidenceId ?? null,
             created_at: toIsoDate(alert.created_at),
             reviewed_at: alert.reviewed_at ? toIsoDate(alert.reviewed_at) : null

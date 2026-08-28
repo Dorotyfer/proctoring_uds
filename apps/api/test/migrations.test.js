@@ -45,6 +45,43 @@ test('uses retry-safe MariaDB DDL and an indexable evidence key', async () => {
   assert.match(identityDocumentMigration.sql, /identity_document_evidence_id CHAR\(36\) NULL/);
   assert.match(identityDocumentMigration.sql, /identity_document/);
 
+  const policyMigration = migrations.find((migration) => migration.file === '011_proctoring_policies.sql');
+  assert.ok(policyMigration);
+  assert.match(policyMigration.sql, /CREATE TABLE IF NOT EXISTS proctoring_policies/);
+  assert.match(policyMigration.sql, /policy_json JSON NOT NULL/);
+  assert.match(policyMigration.sql, /ADD COLUMN IF NOT EXISTS device_mode_policy/);
+  assert.match(policyMigration.sql, /ADD COLUMN IF NOT EXISTS policy_snapshot JSON NULL/);
+  assert.match(policyMigration.sql, /MODIFY COLUMN policy_snapshot JSON NOT NULL/);
+
+  const profileVersionsMigration = migrations.find((migration) => migration.file === '012_biometric_profile_versions.sql');
+  assert.ok(profileVersionsMigration);
+  assert.match(profileVersionsMigration.sql, /CREATE TABLE IF NOT EXISTS proctoring_biometric_profile_versions/);
+  assert.match(profileVersionsMigration.sql, /UNIQUE KEY proctoring_biometric_profile_version_unique/);
+  assert.match(profileVersionsMigration.sql, /ADD COLUMN IF NOT EXISTS active_version_id/);
+  assert.match(profileVersionsMigration.sql, /ADD COLUMN IF NOT EXISTS profile_version_id/);
+
+  const monitorMigration = migrations.find((migration) => migration.file === '014_biometric_monitor_checks.sql');
+  assert.ok(monitorMigration);
+  assert.match(monitorMigration.sql, /CREATE TABLE IF NOT EXISTS proctoring_biometric_monitor_checks/);
+  assert.match(monitorMigration.sql, /UNIQUE KEY proctoring_biometric_monitor_check_unique/);
+
+  const evidenceStatusMigration = migrations.find((migration) => migration.file === '013_evidence_delivery_status.sql');
+  assert.ok(evidenceStatusMigration);
+  assert.match(evidenceStatusMigration.sql, /ADD COLUMN IF NOT EXISTS capture_status/);
+  assert.match(evidenceStatusMigration.sql, /available.*pending.*unavailable.*failed/s);
+
+  const deviceMigration = migrations.find((migration) => migration.file === '015_device_policies.sql');
+  assert.ok(deviceMigration);
+  assert.match(deviceMigration.sql, /ADD COLUMN IF NOT EXISTS seb_config_hash/);
+  assert.match(deviceMigration.sql, /DROP CONSTRAINT proctoring_events_type_check/);
+  assert.match(deviceMigration.sql, /device_mode_mismatch/);
+
+  for (const file of ['016_facial_patterns.sql', '017_environment_signals.sql', '018_risk_scores.sql']) {
+    const migration = migrations.find((item) => item.file === file);
+    assert.ok(migration);
+    assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS/);
+  }
+
   const migrator = await fs.readFile(path.join(migrationsDirectory, '../migrate.js'), 'utf8');
   assert.match(migrator, /information_schema\.table_constraints/);
   assert.match(migrator, /proctoring_evidence_event_fk/);

@@ -91,6 +91,13 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     return () => { active = false; };
   }, [api]);
 
+  useEffect(() => {
+    if (!selectedSession) {
+      return undefined;
+    }
+    return api.subscribeSession(selectedSession.id, (session) => setSelectedSession(session));
+  }, [api, selectedSession?.id]);
+
   async function openCourse(course) {
     setShowBiometricProfiles(false);
     setSelectedCourse(course);
@@ -129,6 +136,19 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
       const payload = await api.getSession(sessionId);
       setSelectedSession(payload.session);
       setContentStatus('ready');
+    } catch (error) {
+      handleRequestError(error, setAuthStatus, setContentStatus);
+    }
+  }
+
+  async function exportCourseReport() {
+    try {
+      const csv = await api.reportCsv(selectedCourse.id, attemptFilters);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      link.download = `proctoring-${selectedCourse.id}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
     } catch (error) {
       handleRequestError(error, setAuthStatus, setContentStatus);
     }
@@ -198,7 +218,7 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
       {contentStatus === 'error' ? <section className="panel-message error-text"><p>No fue posible cargar esta información.</p><button className="text-button" type="button" onClick={() => selectedCourse ? loadSessions() : loadCourses()}>Reintentar</button></section> : null}
       {contentStatus !== 'error' && showBiometricProfiles ? <BiometricProfileList filters={biometricFilters} loading={contentStatus === 'loading'} onBack={() => setShowBiometricProfiles(false)} onFiltersChange={changeBiometricFilters} onReset={resetListedBiometricProfile} onRetry={() => loadBiometricProfiles()} pagination={biometricPagination} profiles={biometricProfiles} /> : null}
       {contentStatus !== 'error' && !showBiometricProfiles && selectedSession ? <PanelSessionDetail canManageBiometrics={profile.scope === 'institutional'} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onResetBiometrics={resetBiometrics} onReview={reviewAlert} session={selectedSession} /> : null}
-      {contentStatus !== 'error' && !showBiometricProfiles && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
+      {contentStatus !== 'error' && !showBiometricProfiles && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onExport={exportCourseReport} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
       {contentStatus !== 'error' && !showBiometricProfiles && !selectedCourse ? <CourseList courses={courses} filters={courseFilters} loading={contentStatus === 'loading'} pagination={coursePagination} onFiltersChange={changeCourseFilters} onOpen={openCourse} onRetry={() => loadCourses()} /> : null}
     </div>
   );
