@@ -1,7 +1,17 @@
+import { useEffect, useState } from 'react';
+
+import SearchField from './SearchField.jsx';
+
 export default function CourseList({ courses, filters, loading, pagination, onFiltersChange, onOpen, onRetry }) {
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+
+  useEffect(() => {
+    setQueryDraft(filters.query);
+  }, [filters.query]);
+
   function submit(event) {
     event.preventDefault();
-    onFiltersChange({ ...filters, page: 1 });
+    onFiltersChange({ ...filters, query: queryDraft, page: 1 });
   }
 
   return (
@@ -12,11 +22,8 @@ export default function CourseList({ courses, filters, loading, pagination, onFi
           <h2 id="courses-title">Seleccioná un curso</h2>
         </div>
       </div>
-      <form className="panel-toolbar" onSubmit={submit}>
-        <label>
-          Buscar curso
-          <input value={filters.query} onChange={(event) => onFiltersChange({ ...filters, query: event.target.value, page: 1 })} />
-        </label>
+      <form className="panel-toolbar" onSubmit={submit} noValidate>
+        <SearchField id="course-search" label="Buscar curso" value={queryDraft} onChange={setQueryDraft} />
         <button className="button" type="submit">Buscar</button>
       </form>
       {loading ? <p className="panel-state">Cargando cursos…</p> : null}

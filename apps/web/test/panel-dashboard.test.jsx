@@ -35,6 +35,100 @@ it('shows the Moodle profile and only the courses returned by the scoped API', a
   expect(screen.getByText(/Código: 7/)).toBeInTheDocument();
 });
 
+it('shows an operational overview above the course catalog', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({
+      courses: [{ id: '7', name: 'Derecho', attemptCount: 3, openAlertCount: 1 }],
+      total: 1,
+      totalPages: 1
+    })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  expect(await screen.findByRole('region', { name: 'Resumen operativo' })).toBeInTheDocument();
+  expect(screen.getByText('Cursos activos')).toBeInTheDocument();
+  expect(screen.getByText('Intentos en cursos visibles')).toBeInTheDocument();
+  expect(screen.getByText('Alertas abiertas')).toBeInTheDocument();
+});
+
+it('clears a course search with an app-owned control', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [], total: 0, totalPages: 0 })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  const search = await screen.findByRole('searchbox', { name: 'Buscar curso' });
+  fireEvent.change(search, { target: { value: 'Derecho' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+
+  expect(search).toHaveValue('');
+  expect(search).toHaveFocus();
+});
+
+it('waits for course search submission before requesting filtered results', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }))
+    .mockResolvedValueOnce(response({ courses: [], total: 0, totalPages: 0 })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  const fetchMock = vi.mocked(fetch);
+  await screen.findByRole('button', { name: /Derecho/ });
+  const search = await screen.findByRole('searchbox', { name: 'Buscar curso' });
+  fireEvent.change(search, { target: { value: 'Medicina' } });
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  expect(fetchMock.mock.calls[2][0]).toContain('query=Medicina');
+});
+
+it('uses an app-owned dialog before revoking a biometric profile', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [], total: 0, totalPages: 0 }),
+    response({ profiles: [{ moodleUserId: 'student-1', studentName: 'Ana Pérez', studentDocument: '1234567', status: 'active', enrollmentVersion: 2 }] })
+  ];
+  const nativeConfirm = vi.fn();
+  vi.stubGlobal('confirm', nativeConfirm);
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Perfiles biométricos' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Revocar' }));
+
+  expect(await screen.findByRole('dialog', { name: 'Revocar perfil biométrico' })).toBeInTheDocument();
+  expect(screen.getByText(/Ana Pérez/)).toBeInTheDocument();
+  expect(nativeConfirm).not.toHaveBeenCalled();
+});
+
+it('keeps focus in the review note while the dialog rerenders', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', studentName: 'Ana', alerts: [{ id: 'alert-1', status: 'open' }] }] }),
+    response({ session: { id: 'session-1', studentName: 'Ana', alerts: [{ id: 'alert-1', type: 'multiple_faces', severity: 'high', status: 'open', evidenceId: null }], events: [], evidence: [] } })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Válida' }));
+
+  const note = await screen.findByLabelText('Nota de revisión (opcional)');
+  note.focus();
+  fireEvent.change(note, { target: { value: 'Revisada con evidencia.' } });
+
+  expect(note).toHaveFocus();
+});
+
 it('paginates the course catalog for institutional users', async () => {
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce(response({ user: profile }))
@@ -105,6 +199,22 @@ it('navigates from a course to attempts and shows the full document only in deta
   expect(await screen.findByText('1234567')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Volver a intentos/ }));
   expect(screen.getByRole('button', { name: /•••4567/ })).toBeInTheDocument();
+});
+
+it('renders a fraud report when optional session collections are absent', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', studentName: 'Ana' }], total: 1, totalPages: 1 }),
+    response({ session: { id: 'session-1', studentName: 'Ana', status: 'completed' } })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Ver reporte de fraude' }));
+
+  expect(await screen.findByText('Sin alertas.')).toBeInTheDocument();
 });
 
 it('shows control level and explainable behavior risk for an attempt', async () => {

@@ -1,8 +1,23 @@
+import { useEffect, useState } from 'react';
+
 import { deviceModeLabel, formatDateTime } from '@/lib/localization';
 
+import SearchField from './SearchField.jsx';
+
 export default function AttemptList({ course, filters, loading, pagination, sessions, onBack, onExport, onFiltersChange, onOpen, onRetry }) {
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+
+  useEffect(() => {
+    setQueryDraft(filters.query);
+  }, [filters.query]);
+
   function update(name, value) {
     onFiltersChange({ ...filters, [name]: value, page: 1 });
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    onFiltersChange({ ...filters, query: queryDraft, page: 1 });
   }
 
   return (
@@ -15,13 +30,13 @@ export default function AttemptList({ course, filters, loading, pagination, sess
         </div>
         <div className="button-row"><span>{pagination.total ?? 0} intentos</span>{onExport ? <button className="text-button" type="button" onClick={onExport}>Exportar CSV</button> : null}</div>
       </div>
-      <div className="attempt-filters">
-        <label>Buscar<input value={filters.query} onChange={(event) => update('query', event.target.value)} placeholder="Estudiante, documento o cuestionario" /></label>
+      <form className="attempt-filters" onSubmit={submit} noValidate>
+        <SearchField id="attempt-search" label="Buscar" value={queryDraft} onChange={setQueryDraft} placeholder="Estudiante, documento o cuestionario" />
         <label>Estado<select value={filters.status} onChange={(event) => update('status', event.target.value)}><option value="all">Todos</option><option value="pending">Pendiente</option><option value="active">Activo</option><option value="completed">Completado</option><option value="expired">Expirado</option></select></label>
         <label>Alertas<select value={filters.alerts} onChange={(event) => update('alerts', event.target.value)}><option value="all">Todas</option><option value="open">Abiertas</option><option value="any">Con alertas</option><option value="none">Sin alertas</option></select></label>
         <label>Desde<input type="date" value={filters.dateFrom} onChange={(event) => update('dateFrom', event.target.value)} /></label>
         <label>Hasta<input type="date" value={filters.dateTo} onChange={(event) => update('dateTo', event.target.value)} /></label>
-      </div>
+      </form>
       {loading ? <p className="panel-state">Cargando intentos…</p> : null}
       {!loading && sessions.length === 0 ? <div className="panel-state"><p>No hay intentos que coincidan con los filtros.</p><button className="text-button" type="button" onClick={onRetry}>Actualizar</button></div> : null}
       <div className="attempt-table-wrap">

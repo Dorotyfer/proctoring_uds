@@ -1,9 +1,19 @@
+import { useEffect, useState } from 'react';
+
 import { formatDateTime } from '@/lib/localization';
 
+import SearchField from './SearchField.jsx';
+
 export default function BiometricProfileList({ profiles, filters, loading, pagination, onBack, onFiltersChange, onReset, onRetry }) {
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+
+  useEffect(() => {
+    setQueryDraft(filters.query);
+  }, [filters.query]);
+
   function submit(event) {
     event.preventDefault();
-    onFiltersChange({ ...filters, page: 1 });
+    onFiltersChange({ ...filters, query: queryDraft, page: 1 });
   }
 
   return (
@@ -16,11 +26,8 @@ export default function BiometricProfileList({ profiles, filters, loading, pagin
         </div>
         <span>{pagination.total ?? 0} perfiles</span>
       </div>
-      <form className="panel-toolbar" onSubmit={submit}>
-        <label>
-          Buscar usuario
-          <input value={filters.query} onChange={(event) => onFiltersChange({ ...filters, query: event.target.value, page: 1 })} />
-        </label>
+      <form className="panel-toolbar" onSubmit={submit} noValidate>
+        <SearchField id="biometric-search" label="Buscar usuario" value={queryDraft} onChange={setQueryDraft} />
         <button className="button" type="submit">Buscar</button>
       </form>
       {loading ? <p className="panel-state">Cargando perfiles…</p> : null}

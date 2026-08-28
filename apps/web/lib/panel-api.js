@@ -22,7 +22,9 @@ export function createPanelApi(apiUrl) {
     listSessions: (courseId, filters) => request(
       `/v1/panel/courses/${encodeURIComponent(courseId)}/sessions?${queryString(filters)}`
     ),
-    getSession: (sessionId) => request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`),
+    getSession: async (sessionId) => normalizeSessionPayload(
+      await request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`)
+    ),
     subscribeSession(sessionId, onUpdate) {
       let stopped = false;
       let source = null;
@@ -31,7 +33,9 @@ export function createPanelApi(apiUrl) {
       const poll = async () => {
         if (stopped) return;
         try {
-          const payload = await request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`);
+          const payload = normalizeSessionPayload(
+            await request(`/v1/panel/sessions/${encodeURIComponent(sessionId)}`)
+          );
           if (!stopped) onUpdate(payload.session);
         } catch {
           // The visible session remains available while the next retry is pending.
@@ -89,6 +93,22 @@ export function createPanelApi(apiUrl) {
       method: 'POST'
     }),
     logout: () => request('/v1/panel/logout', { method: 'POST' })
+  };
+}
+
+function normalizeSessionPayload(payload) {
+  if (!payload || !payload.session || typeof payload.session !== 'object') {
+    throw new Error('panel_api_invalid_session');
+  }
+
+  return {
+    ...payload,
+    session: {
+      ...payload.session,
+      alerts: Array.isArray(payload.session.alerts) ? payload.session.alerts : [],
+      events: Array.isArray(payload.session.events) ? payload.session.events : [],
+      evidence: Array.isArray(payload.session.evidence) ? payload.session.evidence : []
+    }
   };
 }
 

@@ -6,6 +6,7 @@ import { createPanelApi } from '../lib/panel-api.js';
 import AttemptList from './AttemptList.jsx';
 import BiometricProfileList from './BiometricProfileList.jsx';
 import CourseList from './CourseList.jsx';
+import PanelDialog from './PanelDialog.jsx';
 import PanelSessionDetail from './PanelSessionDetail.jsx';
 
 const initialCourseFilters = { page: 1, pageSize: 25, query: '' };
@@ -29,8 +30,17 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   const [biometricFilters, setBiometricFilters] = useState(initialBiometricFilters);
   const [biometricPagination, setBiometricPagination] = useState({ total: 0, totalPages: 0 });
   const [showBiometricProfiles, setShowBiometricProfiles] = useState(false);
+  const [contentError, setContentError] = useState(null);
+  const [dialog, setDialog] = useState(null);
+  const closeDialog = useCallback(() => setDialog(null), []);
+  const overview = useMemo(() => ({
+    courses: coursePagination.total ?? courses.length,
+    attempts: courses.reduce((total, course) => total + (course.attemptCount ?? 0), 0),
+    alerts: courses.reduce((total, course) => total + (course.openAlertCount ?? 0), 0)
+  }), [coursePagination.total, courses]);
 
   const loadCourses = useCallback(async (filters = courseFilters) => {
+    setContentError(null);
     setContentStatus('loading');
     try {
       const payload = await api.listCourses(filters);
@@ -46,6 +56,7 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     if (!course) {
       return;
     }
+    setContentError(null);
     setContentStatus('loading');
     try {
       const payload = await api.listSessions(course.id, filters);
@@ -58,6 +69,7 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   }, [api, attemptFilters, selectedCourse]);
 
   const loadBiometricProfiles = useCallback(async (filters = biometricFilters) => {
+    setContentError(null);
     setContentStatus('loading');
     try {
       const payload = await api.listBiometricProfiles(filters);
@@ -118,25 +130,24 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     await loadBiometricProfiles(filters);
   }
 
-  async function resetListedBiometricProfile(moodleUserId) {
-    if (!window.confirm('¿Revocar este perfil y exigir un nuevo registro biométrico?')) {
-      return;
-    }
-    try {
-      await api.resetBiometricProfile(moodleUserId);
-      await loadBiometricProfiles();
-    } catch (error) {
-      handleRequestError(error, setAuthStatus, setContentStatus);
-    }
+  function resetListedBiometricProfile(moodleUserId) {
+    setDialog({
+      type: 'reset-listed-profile',
+      moodleUserId,
+      title: 'Revocar perfil biométrico',
+      description: 'La cuenta tendrá que completar una nueva inscripción biométrica antes de volver a rendir.'
+    });
   }
 
   async function openSession(sessionId) {
+    setContentError(null);
     setContentStatus('loading');
     try {
       const payload = await api.getSession(sessionId);
       setSelectedSession(payload.session);
       setContentStatus('ready');
     } catch (error) {
+      setContentError({ type: 'session', id: sessionId });
       handleRequestError(error, setAuthStatus, setContentStatus);
     }
   }
@@ -164,15 +175,14 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     await loadSessions(selectedCourse, filters);
   }
 
-  async function reviewAlert(alertId, reviewStatus) {
-    const note = window.prompt('Nota de revisión (opcional)', '') ?? '';
-    try {
-      await api.reviewAlert(alertId, reviewStatus, note);
-      await openSession(selectedSession.id);
-      await loadSessions(selectedCourse, attemptFilters);
-    } catch (error) {
-      handleRequestError(error, setAuthStatus, setContentStatus);
-    }
+  function reviewAlert(alertId, reviewStatus) {
+    setDialog({
+      type: 'review-alert',
+      alertId,
+      reviewStatus,
+      title: reviewStatus === 'reviewed' ? 'Marcar alerta como válida' : 'Marcar alerta como inválida',
+      description: 'La decisión quedará registrada en el historial de revisión. Podés agregar una nota para justificarla.'
+    });
   }
 
   async function openEvidence(evidenceId) {
@@ -184,14 +194,37 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
     }
   }
 
-  async function resetBiometrics(moodleUserId) {
-    if (!window.confirm('¿Exigir una nueva inscripción biométrica para esta cuenta?')) {
+  function resetBiometrics(moodleUserId) {
+    setDialog({
+      type: 'reset-session-profile',
+      moodleUserId,
+      title: 'Exigir nueva inscripción',
+      description: 'La cuenta deberá registrar nuevamente su biometría antes de iniciar otro intento.'
+    });
+  }
+
+  async function confirmDialog() {
+    if (!dialog) {
       return;
     }
+    setDialog((current) => ({ ...current, pending: true }));
     try {
-      await api.resetBiometricProfile(moodleUserId);
-      await openSession(selectedSession.id);
+      if (dialog.type === 'reset-listed-profile') {
+        await api.resetBiometricProfile(dialog.moodleUserId);
+        await loadBiometricProfiles();
+      }
+      if (dialog.type === 'reset-session-profile') {
+        await api.resetBiometricProfile(dialog.moodleUserId);
+        await openSession(selectedSession.id);
+      }
+      if (dialog.type === 'review-alert') {
+        await api.reviewAlert(dialog.alertId, dialog.reviewStatus, dialog.note ?? '');
+        await openSession(selectedSession.id);
+        await loadSessions(selectedCourse, attemptFilters);
+      }
+      setDialog(null);
     } catch (error) {
+      setDialog((current) => ({ ...current, pending: false }));
       handleRequestError(error, setAuthStatus, setContentStatus);
     }
   }
@@ -212,14 +245,32 @@ export default function PanelDashboard({ apiUrl, moodleReturnUrl }) {
   return (
     <div className="panel-app">
       <header className="panel-userbar">
-        <div><strong>{profile.displayName}</strong><span>{profile.scope === 'institutional' ? 'Acceso institucional' : 'Acceso a cursos asignados'}</span></div>
+        <div className="panel-identity"><span className="identity-mark" aria-hidden="true">PU</span><span><strong>{profile.displayName}</strong><span>{profile.scope === 'institutional' ? 'Acceso institucional' : 'Acceso a cursos asignados'}</span></span></div>
         <div className="button-row"><button className="text-button" type="button" onClick={logout}>Cerrar sesión</button>{profile.scope === 'institutional' ? <button className="button" type="button" onClick={openBiometricProfiles}>Perfiles biométricos</button> : null}</div>
       </header>
-      {contentStatus === 'error' ? <section className="panel-message error-text"><p>No fue posible cargar esta información.</p><button className="text-button" type="button" onClick={() => selectedCourse ? loadSessions() : loadCourses()}>Reintentar</button></section> : null}
+      {!showBiometricProfiles && !selectedCourse && !selectedSession ? <section className="panel-overview" aria-label="Resumen operativo">
+        <div className="overview-intro"><span className="live-indicator"><span aria-hidden="true" /> Sistema operativo</span><h2>Vista general</h2><p>Revisá el estado de tus evaluaciones desde un solo lugar.</p></div>
+        <div className="overview-stats">
+          <div className="overview-stat"><span className="stat-icon" aria-hidden="true">⌁</span><span><strong>{overview.courses}</strong><small>Cursos activos</small></span></div>
+          <div className="overview-stat"><span className="stat-icon" aria-hidden="true">↗</span><span><strong>{overview.attempts}</strong><small>Intentos en cursos visibles</small></span></div>
+          <div className="overview-stat"><span className="stat-icon stat-icon-alert" aria-hidden="true">!</span><span><strong>{overview.alerts}</strong><small>Alertas abiertas</small></span></div>
+        </div>
+      </section> : null}
+      {contentStatus === 'error' ? <section className="panel-message error-text"><p>{contentError?.type === 'session' ? 'No fue posible cargar el reporte de fraude.' : 'No fue posible cargar esta información.'}</p><button className="text-button" type="button" onClick={() => contentError?.type === 'session' ? openSession(contentError.id) : selectedCourse ? loadSessions() : loadCourses()}>Reintentar</button></section> : null}
       {contentStatus !== 'error' && showBiometricProfiles ? <BiometricProfileList filters={biometricFilters} loading={contentStatus === 'loading'} onBack={() => setShowBiometricProfiles(false)} onFiltersChange={changeBiometricFilters} onReset={resetListedBiometricProfile} onRetry={() => loadBiometricProfiles()} pagination={biometricPagination} profiles={biometricProfiles} /> : null}
       {contentStatus !== 'error' && !showBiometricProfiles && selectedSession ? <PanelSessionDetail canManageBiometrics={profile.scope === 'institutional'} onBack={() => setSelectedSession(null)} onEvidence={openEvidence} onResetBiometrics={resetBiometrics} onReview={reviewAlert} session={selectedSession} /> : null}
       {contentStatus !== 'error' && !showBiometricProfiles && selectedCourse && !selectedSession ? <AttemptList course={selectedCourse} filters={attemptFilters} loading={contentStatus === 'loading'} pagination={attemptPagination} sessions={sessions} onBack={() => setSelectedCourse(null)} onExport={exportCourseReport} onFiltersChange={changeAttemptFilters} onOpen={openSession} onRetry={() => loadSessions()} /> : null}
       {contentStatus !== 'error' && !showBiometricProfiles && !selectedCourse ? <CourseList courses={courses} filters={courseFilters} loading={contentStatus === 'loading'} pagination={coursePagination} onFiltersChange={changeCourseFilters} onOpen={openCourse} onRetry={() => loadCourses()} /> : null}
+      {dialog ? <PanelDialog
+        title={dialog.title}
+        description={dialog.description}
+        confirmLabel={dialog.type === 'review-alert' ? 'Guardar revisión' : 'Confirmar'}
+        onConfirm={confirmDialog}
+        onCancel={closeDialog}
+        busy={dialog.pending}
+      >
+        {dialog.type === 'review-alert' ? <label className="dialog-field">Nota de revisión (opcional)<textarea className="resize-none" value={dialog.note ?? ''} onChange={(event) => setDialog((current) => ({ ...current, note: event.target.value }))} rows="4" /></label> : null}
+      </PanelDialog> : null}
     </div>
   );
 }
