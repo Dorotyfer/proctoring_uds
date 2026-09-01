@@ -35,6 +35,13 @@ test('native upgrade installs the schema for an already registered legacy plugin
   assert.match(xml, /NAME="local_proctoring_migration"/);
 });
 
+test('legacy repository detects Moodle quiz access rule names on Moodle 4.5', async () => {
+  const repository = await readFile(new URL('classes/repository/legacy_settings_repository.php', root), 'utf8');
+
+  assert.match(repository, /core_component::get_plugin_list\('quizaccess'\)/);
+  assert.match(repository, /array_key_exists\('udsmonitor'/);
+});
+
 test('native domain and repository interfaces exist', async () => {
   const files = [
     'classes/domain/session_state.php',

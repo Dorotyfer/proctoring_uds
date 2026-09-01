@@ -13,7 +13,9 @@ final class legacy_settings_repository {
     }
 
     public function has_component(string $component): bool {
-        return array_key_exists($component, get_plugin_list('quizaccess'));
+        $plugins = \core_component::get_plugin_list('quizaccess');
+        $shortname = preg_replace('/^quizaccess_/', '', $component);
+        return array_key_exists($component, $plugins) || array_key_exists($shortname, $plugins);
     }
 
     public function read_global(): array {
