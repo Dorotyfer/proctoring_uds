@@ -33,3 +33,8 @@ test('panel enforces course scoping and caps page size', async () => {
   assert.match(source, /min\(100/);
   assert.match(source, /review_alert/);
 });
+
+test('panel renderable has the Mustache template expected by Moodle', async () => {
+  const template = await readFile(new URL('templates/panel_page.mustache', root), 'utf8');
+  assert.match(template, /data-region="panel"/);
+});
