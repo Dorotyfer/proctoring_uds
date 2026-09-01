@@ -22,6 +22,6 @@ test('quiz rule exposes native access enforcement and page setup', async () => {
   assert.match(rule, /function prevent_access/);
   assert.match(rule, /function setup_attempt_page\(\$page\)\s*\{/);
   assert.match(rule, /quizaccess_proctoring\/launch/);
-  assert.match(version, /\$plugin->version\s*=\s*2026090101/);
+  assert.match(version, /\$plugin->version\s*=\s*2026090102/);
   assert.doesNotMatch(launch, /redirect\(|API|remote/i);
 });

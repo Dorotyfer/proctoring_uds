@@ -59,6 +59,15 @@ test('policy validator accepts associative signal maps', async () => {
   assert.match(validator, /!isset\(\$signal\['type'\]\)/);
 });
 
+test('native quiz access rule upgrades the policy columns', async () => {
+  const version = await readFile(new URL('../../quizaccess/proctoring/version.php', root), 'utf8');
+  const upgrade = await readFile(new URL('../../quizaccess/proctoring/db/upgrade.php', root), 'utf8');
+
+  assert.match(version, /\$plugin->version\s*=\s*2026090102/);
+  assert.match(upgrade, /policyjson/);
+  assert.match(upgrade, /field_exists/);
+});
+
 test('native domain and repository interfaces exist', async () => {
   const files = [
     'classes/domain/session_state.php',

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/quiz/accessrule/proctoring/db" VERSION="2026090101" COMMENT="Native per-quiz proctoring policy">
+<XMLDB PATH="mod/quiz/accessrule/proctoring/db" VERSION="2026090102" COMMENT="Native per-quiz proctoring policy">
   <TABLES>
     <TABLE NAME="quizaccess_proctoring" COMMENT="Proctoring policy for a quiz">
       <FIELDS>
