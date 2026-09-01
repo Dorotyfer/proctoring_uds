@@ -48,5 +48,9 @@ define(['core/ajax'], function(Ajax) {
     });
   }
 
-  return {getAttempt, startAttempt, activateAttempt, completeAttempt, recordEvents, recordIncident};
+  function recordBiometricCheck(attemptid, samples) {
+    return call('local_proctoring_record_biometric_check', {attemptid, samples});
+  }
+
+  return {getAttempt, startAttempt, activateAttempt, completeAttempt, recordEvents, recordIncident, recordBiometricCheck};
 });

@@ -45,5 +45,19 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'local_proctoring_upload_evidence' => [
+        'classname' => 'local_proctoring\\external\\upload_evidence',
+        'methodname' => 'execute',
+        'description' => 'Store encrypted evidence in the Moodle private File API.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
+    'local_proctoring_record_biometric_check' => [
+        'classname' => 'local_proctoring\\external\\record_biometric_check',
+        'methodname' => 'execute',
+        'description' => 'Record a biometric verification result for an attempt.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
 ];
 $services = [];

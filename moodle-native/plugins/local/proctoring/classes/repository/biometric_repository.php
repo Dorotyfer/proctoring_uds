@@ -17,6 +17,28 @@ class biometric_repository {
     return $record ?: null;
   }
 
+  public function find_version(int $versionid): ?\stdClass {
+    $record = $this->db->get_record('local_proctoring_biover', ['id' => $versionid]);
+    return $record ?: null;
+  }
+
+  public function find_active_version(\stdClass $profile): ?\stdClass {
+    if (!empty($profile->activeversionid)) {
+      return $this->find_version((int)$profile->activeversionid);
+    }
+    $record = $this->db->get_record('local_proctoring_biover', [
+      'profileid' => $profile->id,
+      'status' => 'active',
+    ], 'id, profileid, version, algorithm, descriptorciphertext, descriptorlength, encryptioniv, encryptiontag, consentversion, consentedat, enrolledat, revokedat, status, timecreated');
+    return $record ?: null;
+  }
+
+  public function next_version(int $profileid): int {
+    $records = $this->db->get_records('local_proctoring_biover', ['profileid' => $profileid], 'version DESC', 'version', 0, 1);
+    $record = reset($records);
+    return $record ? ((int)$record->version + 1) : 1;
+  }
+
   public function create_profile(int $userid, string $consentversion): \stdClass {
     $record = (object)[
       'userid' => $userid,
