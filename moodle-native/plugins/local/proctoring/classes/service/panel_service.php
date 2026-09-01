@@ -145,6 +145,13 @@ final class panel_service {
     $session = $this->db->get_record('local_proctoring_session', ['id' => $alert->sessionid], '*', MUST_EXIST);
     $this->require_course_access((int)$session->courseid, 'local/proctoring:reviewowncoursealerts');
     $reviewed = (new alert_repository($this->db))->review($alertid, (int)$USER->id, $status, $note);
+    \local_proctoring\event\alert_reviewed::create([
+      'context' => \context_course::instance((int)$session->courseid),
+      'objectid' => $alertid,
+      'userid' => (int)$USER->id,
+      'relateduserid' => (int)$session->userid,
+      'other' => ['status' => $status],
+    ])->trigger();
     return ['alert' => self::serialize_alert($reviewed)];
   }
 

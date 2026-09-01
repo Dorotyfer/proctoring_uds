@@ -83,6 +83,20 @@ final class evidence_service {
       'iv' => $evidence->encryptioniv,
       'tag' => $evidence->encryptiontag,
     ]);
+    $audit = (object)[
+      'evidenceid' => $evidenceid,
+      'actorid' => $userid,
+      'action' => 'view',
+      'ipaddress' => getremoteaddr(),
+      'useragent' => substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 1000),
+      'timecreated' => time(),
+    ];
+    $this->db->insert_record('local_proctoring_evaudit', $audit);
+    \local_proctoring\event\evidence_accessed::create([
+      'context' => \context_system::instance(),
+      'objectid' => $evidenceid,
+      'userid' => $userid,
+    ])->trigger();
     return ['content' => $plaintext, 'filename' => 'capture.jpg', 'mimetype' => 'image/jpeg'];
   }
 
