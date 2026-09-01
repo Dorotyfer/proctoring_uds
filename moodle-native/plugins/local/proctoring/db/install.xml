@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/proctoring/db" VERSION="2026090105" COMMENT="Native Moodle proctoring">
+  <TABLES>
+    <TABLE NAME="local_proctoring_policy" COMMENT="Versioned proctoring policy per quiz">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="version" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="policyjson" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="course_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="quiz_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="actor_fk" TYPE="foreign" FIELDS="actorid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="quiz_version_uix" UNIQUE="true" FIELDS="quizid, version"/>
+        <INDEX NAME="course_quiz_idx" UNIQUE="false" FIELDS="courseid, quizid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_session" COMMENT="Proctoring session per Moodle quiz attempt">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="policyid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="policyversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="policysnapshot" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="devicemode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="browser" SEQUENCE="false"/>
+        <FIELD NAME="devicepolicy" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="either" SEQUENCE="false"/>
+        <FIELD NAME="controllevel" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="medium" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false"/>
+        <FIELD NAME="expiresat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeissued" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timeprepared" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timeactivated" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecompleted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="referenceevidenceid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="identityevidenceid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="attempt_fk" TYPE="foreign" FIELDS="attemptid" REFTABLE="quiz_attempts" REFFIELDS="id"/>
+        <KEY NAME="user_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="course_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="quiz_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="policy_fk" TYPE="foreign" FIELDS="policyid" REFTABLE="local_proctoring_policy" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="attempt_uix" UNIQUE="true" FIELDS="attemptid"/>
+        <INDEX NAME="user_course_idx" UNIQUE="false" FIELDS="userid, courseid"/>
+        <INDEX NAME="status_expiry_idx" UNIQUE="false" FIELDS="status, expiresat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_event" COMMENT="Normalized browser and adapter signal">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="clienteventid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="occurredat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="metadata" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="session_client_uix" UNIQUE="true" FIELDS="sessionid, clienteventid"/>
+        <INDEX NAME="session_time_idx" UNIQUE="false" FIELDS="sessionid, occurredat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_alert" COMMENT="Reviewable incident derived from an event">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="eventid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="severity" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="low" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="open" SEQUENCE="false"/>
+        <FIELD NAME="capturestatus" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="pending" SEQUENCE="false"/>
+        <FIELD NAME="reviewedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="reviewnote" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timereviewed" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+        <KEY NAME="event_fk" TYPE="foreign" FIELDS="eventid" REFTABLE="local_proctoring_event" REFFIELDS="id"/>
+        <KEY NAME="reviewer_fk" TYPE="foreign" FIELDS="reviewedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="event_uix" UNIQUE="true" FIELDS="eventid"/>
+        <INDEX NAME="session_status_idx" UNIQUE="false" FIELDS="sessionid, status, timecreated"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_evidence" COMMENT="Encrypted private-file metadata">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="eventid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="24" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="component" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="filearea" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="filepath" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="mimetype" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="filesize" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sha256" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="encryptioniv" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="encryptiontag" TYPE="char" LENGTH="128" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="expiresat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="deletedat" TYPE="int" LENGTH="10" NOTNULL="false" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+        <KEY NAME="event_fk" TYPE="foreign" FIELDS="eventid" REFTABLE="local_proctoring_event" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="session_created_idx" UNIQUE="false" FIELDS="sessionid, timecreated"/>
+        <INDEX NAME="retention_idx" UNIQUE="false" FIELDS="deletedat, expiresat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_evaudit" COMMENT="Evidence access audit trail">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="evidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="action" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="ipaddress" TYPE="char" LENGTH="45" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="useragent" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="evidence_fk" TYPE="foreign" FIELDS="evidenceid" REFTABLE="local_proctoring_evidence" REFFIELDS="id"/>
+        <KEY NAME="actor_fk" TYPE="foreign" FIELDS="actorid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="evidence_time_idx" UNIQUE="false" FIELDS="evidenceid, timecreated"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_biometric" COMMENT="User biometric profile pointer">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="activeversionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="active" SEQUENCE="false"/>
+        <FIELD NAME="consentversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="consentedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timerevoked" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="user_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="user_uix" UNIQUE="true" FIELDS="userid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_biover" COMMENT="Encrypted biometric descriptor version">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="version" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="algorithm" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="descriptorciphertext" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="descriptorlength" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="encryptioniv" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="encryptiontag" TYPE="char" LENGTH="128" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="consentversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="consentedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="enrolledat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="revokedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="active" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profile_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_proctoring_biometric" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="profile_version_uix" UNIQUE="true" FIELDS="profileid, version"/>
+        <INDEX NAME="profile_status_idx" UNIQUE="false" FIELDS="profileid, status"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_biocheck" COMMENT="Biometric verification result per session">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="profileversionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="result" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="similarity" TYPE="number" LENGTH="10" DECIMALS="6" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="threshold" TYPE="number" LENGTH="10" DECIMALS="6" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="samplecount" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="enrollmentversion" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+        <KEY NAME="profile_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_proctoring_biometric" REFFIELDS="id"/>
+        <KEY NAME="version_fk" TYPE="foreign" FIELDS="profileversionid" REFTABLE="local_proctoring_biover" REFFIELDS="id"/>
+        <KEY NAME="user_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="session_uix" UNIQUE="true" FIELDS="sessionid"/>
+        <INDEX NAME="user_time_idx" UNIQUE="false" FIELDS="userid, timecreated"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_envsignal" COMMENT="Environment detection signal">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="eventid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="objecttype" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="objectcount" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="confidence" TYPE="number" LENGTH="10" DECIMALS="6" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="boxjson" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="modelversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+        <KEY NAME="event_fk" TYPE="foreign" FIELDS="eventid" REFTABLE="local_proctoring_event" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="event_uix" UNIQUE="true" FIELDS="eventid"/>
+        <INDEX NAME="session_time_idx" UNIQUE="false" FIELDS="sessionid, timecreated"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_riskscore" COMMENT="Calculated session risk snapshot">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="score" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="category" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="policyversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="factorsjson" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="calculatedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="session_fk" TYPE="foreign" FIELDS="sessionid" REFTABLE="local_proctoring_session" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="session_calculated_idx" UNIQUE="false" FIELDS="sessionid, calculatedat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_migration" COMMENT="Redacted legacy migration audit">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="migrationversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourcecomponent" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourcekey" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="targetkey" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="mapped" SEQUENCE="false"/>
+        <FIELD NAME="message" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="actor_fk" TYPE="foreign" FIELDS="actorid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="migration_source_uix" UNIQUE="true" FIELDS="migrationversion, sourcekey, quizid"/>
+        <INDEX NAME="migration_status_idx" UNIQUE="false" FIELDS="migrationversion, status"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

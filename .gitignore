@@ -1,0 +1,12 @@
+.worktrees/
+.superpowers/
+node_modules/
+.env
+.env.local
+.server-credentials.local.md
+.next/
+coverage/
+playwright-report/
+test-results/
+apps/web/public/models/
+apps/web/generated/human.esm.js

@@ -1,0 +1,15 @@
+.local-proctoring-preparation-card {
+  max-width: 42rem;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  border: 1px solid #d8dde3;
+  background: #fff;
+}
+
+.local-proctoring-preparation-card button {
+  padding: 0.65rem 1rem;
+  border: 0;
+  background: #172554;
+  color: #fff;
+  cursor: pointer;
+}

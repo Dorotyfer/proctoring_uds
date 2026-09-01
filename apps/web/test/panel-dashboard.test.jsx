@@ -1,0 +1,368 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+
+import PanelDashboard from '@/components/PanelDashboard';
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+it('instructs an expired user to enter from Moodle without offering local credentials', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  expect(await screen.findByText('Ingresá desde Moodle para acceder al panel.')).toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: /usuario/i })).not.toBeInTheDocument();
+});
+
+it('shows the Moodle profile and only the courses returned by the scoped API', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({
+      courses: [{ id: '7', name: 'Derecho', attemptCount: 3, openAlertCount: 1 }],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1
+    })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  expect(await screen.findByText('Persona revisora')).toBeInTheDocument();
+  expect(screen.getByText('Acceso institucional')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Derecho/ })).toBeInTheDocument();
+  expect(screen.getByText(/Código: 7/)).toBeInTheDocument();
+});
+
+it('shows an operational overview above the course catalog', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({
+      courses: [{ id: '7', name: 'Derecho', attemptCount: 3, openAlertCount: 1 }],
+      total: 1,
+      totalPages: 1
+    })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  expect(await screen.findByRole('region', { name: 'Resumen operativo' })).toBeInTheDocument();
+  expect(screen.getByText('Cursos activos')).toBeInTheDocument();
+  expect(screen.getByText('Intentos en cursos visibles')).toBeInTheDocument();
+  expect(screen.getByText('Alertas abiertas')).toBeInTheDocument();
+});
+
+it('clears a course search with an app-owned control', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [], total: 0, totalPages: 0 })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  const search = await screen.findByRole('searchbox', { name: 'Buscar curso' });
+  fireEvent.change(search, { target: { value: 'Derecho' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+
+  expect(search).toHaveValue('');
+  expect(search).toHaveFocus();
+});
+
+it('waits for course search submission before requesting filtered results', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }))
+    .mockResolvedValueOnce(response({ courses: [], total: 0, totalPages: 0 })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+
+  const fetchMock = vi.mocked(fetch);
+  await screen.findByRole('button', { name: /Derecho/ });
+  const search = await screen.findByRole('searchbox', { name: 'Buscar curso' });
+  fireEvent.change(search, { target: { value: 'Medicina' } });
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  expect(fetchMock.mock.calls[2][0]).toContain('query=Medicina');
+});
+
+it('uses an app-owned dialog before revoking a biometric profile', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [], total: 0, totalPages: 0 }),
+    response({ profiles: [{ moodleUserId: 'student-1', studentName: 'Ana Pérez', studentDocument: '1234567', status: 'active', enrollmentVersion: 2 }] })
+  ];
+  const nativeConfirm = vi.fn();
+  vi.stubGlobal('confirm', nativeConfirm);
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Perfiles biométricos' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Revocar' }));
+
+  expect(await screen.findByRole('dialog', { name: 'Revocar perfil biométrico' })).toBeInTheDocument();
+  expect(screen.getByText(/Ana Pérez/)).toBeInTheDocument();
+  expect(nativeConfirm).not.toHaveBeenCalled();
+});
+
+it('keeps focus in the review note while the dialog rerenders', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', studentName: 'Ana', alerts: [{ id: 'alert-1', status: 'open' }] }] }),
+    response({ session: { id: 'session-1', studentName: 'Ana', alerts: [{ id: 'alert-1', type: 'multiple_faces', severity: 'high', status: 'open', evidenceId: null }], events: [], evidence: [] } })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Válida' }));
+
+  const note = await screen.findByLabelText('Nota de revisión (opcional)');
+  note.focus();
+  fireEvent.change(note, { target: { value: 'Revisada con evidencia.' } });
+
+  expect(note).toHaveFocus();
+});
+
+it('paginates the course catalog for institutional users', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 3, openAlertCount: 1 }], total: 2, totalPages: 2 }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '8', name: 'Medicina', attemptCount: 4, openAlertCount: 0 }], total: 2, totalPages: 2 })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Siguiente curso' }));
+
+  expect(await screen.findByRole('button', { name: /Medicina/ })).toBeInTheDocument();
+});
+
+it('opens the biometric profiles section for institutional users', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [], total: 0, totalPages: 0 }),
+    response({
+      profiles: [{
+        enrolledAt: '2026-08-24T12:00:00.000Z',
+        enrollmentVersion: 2,
+        lastVerifiedAt: null,
+        moodleUserId: 'student-1',
+        revokedAt: null,
+        status: 'active',
+        studentDocument: '1234567',
+        studentName: 'Ana Pérez'
+      }],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Perfiles biométricos' }));
+
+  expect(await screen.findByText('student-1')).toBeInTheDocument();
+  expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
+  expect(screen.getByText('1234567')).toBeInTheDocument();
+  expect(screen.getAllByText('Registrado').length).toBe(2);
+});
+
+it('navigates from a course to attempts and shows the full document only in detail', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana Pérez', studentDocumentLast4: '•••4567', quizName: 'Examen final', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }],
+      total: 1,
+      totalPages: 1
+    }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', studentName: 'Ana Pérez', studentDocument: '1234567', quizName: 'Examen final', status: 'active', deviceMode: 'browser', alerts: [], events: [], evidence: []
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  expect(await screen.findByRole('button', { name: /•••4567/ })).toBeInTheDocument();
+  expect(screen.queryByText('1234567')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Ana Pérez/ }));
+  expect(await screen.findByText('1234567')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Volver a intentos/ }));
+  expect(screen.getByRole('button', { name: /•••4567/ })).toBeInTheDocument();
+});
+
+it('renders a fraud report when optional session collections are absent', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho' }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', studentName: 'Ana' }], total: 1, totalPages: 1 }),
+    response({ session: { id: 'session-1', studentName: 'Ana', status: 'completed' } })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Ver reporte de fraude' }));
+
+  expect(await screen.findByText('Sin alertas.')).toBeInTheDocument();
+});
+
+it('shows control level and explainable behavior risk for an attempt', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-risk', attemptId: '15', studentName: 'Ana Pérez', studentDocumentLast4: '•••4567', quizName: 'Examen', deviceMode: 'browser', status: 'completed', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1, controlLevel: 'high', riskCategory: 'high_risk', riskScore: 80 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-risk', attemptId: '15', courseId: '7', studentName: 'Ana Pérez', studentDocument: '1234567', quizName: 'Examen', status: 'completed', deviceMode: 'browser', controlLevel: 'high',
+        risk: { category: 'high_risk', controlLevel: 'high', score: 80, counts: { multiple_faces: 1 }, reasons: [{ code: 'multiple_faces', count: 1, label: 'Se detectaron múltiples rostros', points: 30 }] },
+        alerts: [], events: [{ id: 'event-1', type: 'multiple_faces', occurred_at: '2026-08-20T20:05:00.000Z' }, { id: 'event-2', type: 'attention_signal', metadata: { expression: 'neutral', confidence: 0.91 }, occurred_at: '2026-08-20T20:06:00.000Z' }, { id: 'event-3', type: 'page_visibility_changed', occurred_at: '2026-08-20T20:07:00.000Z' }], evidence: []
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  expect(await screen.findByText(/Riesgo alto/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ver reporte de fraude' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Estudiante' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Nivel de control' })).toBeInTheDocument();
+  expect(screen.getByRole('cell', { name: /Ana Pérez/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Ana Pérez/ }));
+
+  expect(await screen.findByText('Riesgo de fraude alto')).toBeInTheDocument();
+  expect(screen.getByText('Nivel de control: Alto')).toBeInTheDocument();
+  expect(screen.getByText('Puntaje: 80/100')).toBeInTheDocument();
+  expect(screen.getAllByText('Se detectaron múltiples rostros').length).toBeGreaterThan(0);
+  expect(screen.getByText(/requiere revisión humana/)).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: 'Puntaje de riesgo: 80 sobre 100' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Señales detectadas' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Cronología de eventos' })).toBeInTheDocument();
+  expect(screen.getByText('Cambio de visibilidad de la página')).toBeInTheDocument();
+  expect(screen.getByText('Observación de expresión facial')).toBeInTheDocument();
+  expect(screen.getByText('Expresión observada: Neutral · confianza 91%')).toBeInTheDocument();
+});
+
+it('renders only evidence marked as an incident', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana', studentDocumentLast4: null, quizName: 'Examen', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', status: 'active', deviceMode: 'browser', alerts: [], events: [],
+        evidence: [
+          { id: 'interval-1', kind: 'interval', created_at: '2026-08-20T20:00:00.000Z' },
+          { id: 'alert-1', kind: 'alert', created_at: '2026-08-20T20:01:00.000Z' }
+        ]
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+
+  await waitFor(() => expect(screen.getByRole('button', { name: /Ver incidencia/ })).toBeInTheDocument());
+  expect(screen.queryByText(/interval/)).not.toBeInTheDocument();
+});
+
+it('shows identity document evidence separately from incident images', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce(response({ user: profile }))
+    .mockResolvedValueOnce(response({ courses: [{ id: '7', name: 'Derecho' }] }))
+    .mockResolvedValueOnce(response({ sessions: [{ id: 'session-1', studentName: 'Ana Pérez', alerts: [] }] }))
+    .mockResolvedValueOnce(response({
+      session: {
+        id: 'session-1',
+        studentName: 'Ana Pérez',
+        alerts: [],
+        events: [],
+        evidence: [{ id: 'document-evidence', kind: 'identity_document', created_at: '2026-08-20T20:01:00.000Z' }]
+      }
+    })));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana Pérez/ }));
+
+  expect(await screen.findByRole('heading', { name: 'Verificación de identidad' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ver foto con documento de identidad' })).toBeInTheDocument();
+  expect(screen.getByText('No hay imágenes asociadas a incidencias.')).toBeInTheDocument();
+});
+
+it('shows linked incident evidence with valid and invalid review actions', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana', studentDocumentLast4: null, quizName: 'Examen', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', status: 'active', deviceMode: 'browser',
+        alerts: [{ id: 'alert-1', type: 'biometric_mismatch', severity: 'high', status: 'open', evidenceId: 'evidence-1' }],
+        events: [],
+        evidence: [{ id: 'evidence-1', kind: 'alert', created_at: '2026-08-20T20:01:00.000Z' }]
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+
+  expect(await screen.findByRole('columnheader', { name: 'Alerta' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Severidad' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Revisión' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: /Válida/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Inválida/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Ver imagen de la incidencia/ })).toBeInTheDocument();
+  expect(screen.getByText('Identidad biométrica no coincidente')).toBeInTheDocument();
+});
+
+it('distinguishes an incident without a camera frame from a pending upload', async () => {
+  const requests = [
+    response({ user: profile }),
+    response({ courses: [{ id: '7', name: 'Derecho', attemptCount: 1, openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({ sessions: [{ id: 'session-1', attemptId: '15', studentName: 'Ana', studentDocumentLast4: null, quizName: 'Examen', deviceMode: 'browser', status: 'active', createdAt: '2026-08-20T20:00:00.000Z', openAlertCount: 1 }], total: 1, totalPages: 1 }),
+    response({
+      session: {
+        id: 'session-1', attemptId: '15', courseId: '7', status: 'active', deviceMode: 'browser',
+        alerts: [{ id: 'alert-1', type: 'camera_interrupted', severity: 'high', status: 'open', evidenceId: null, captureStatus: 'unavailable' }],
+        events: [], evidence: []
+      }
+    })
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(requests.shift())));
+
+  render(<PanelDashboard apiUrl="https://api.test" moodleReturnUrl="https://moodle.test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Derecho/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Ana/ }));
+
+  expect(await screen.findByText('Sin imagen disponible.')).toBeInTheDocument();
+  expect(screen.queryByText('Imagen pendiente de guardar.')).not.toBeInTheDocument();
+});
+
+const profile = {
+  moodleUserId: '42',
+  displayName: 'Persona revisora',
+  scope: 'institutional',
+  canReview: true,
+  canViewEvidence: true
+};
+
+function response(payload) {
+  return { ok: true, status: 200, async json() { return payload; } };
+}

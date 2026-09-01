@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/proctoring/db" VERSION="2026081900" COMMENT="Proctoring session references stored by Moodle">
+  <TABLES>
+    <TABLE NAME="local_proctoring_sessions" COMMENT="References to sessions held by the external proctoring API">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="remotesessionid" TYPE="char" LENGTH="36" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false"/>
+        <FIELD NAME="expiresat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="attempt_fk" TYPE="foreign" FIELDS="attemptid" REFTABLE="quiz_attempts" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="attempt_unique" UNIQUE="true" FIELDS="attemptid"/>
+        <INDEX NAME="remote_session_idx" UNIQUE="true" FIELDS="remotesessionid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

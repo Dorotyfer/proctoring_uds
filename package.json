@@ -1,0 +1,20 @@
+{
+  "name": "proctoring-uds",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "type": "module",
+  "scripts": {
+    "api:dev": "pnpm --filter @proctoring/api dev",
+    "api:evidence:purge": "pnpm --filter @proctoring/api evidence:purge",
+    "api:infra:check": "pnpm --filter @proctoring/api infra:check",
+    "pilot:load": "pnpm --filter @proctoring/api pilot:load",
+    "pilot:fixtures": "pnpm --filter @proctoring/api pilot:fixtures",
+    "api:migrate": "pnpm --filter @proctoring/api migrate",
+    "api:start": "pnpm --filter @proctoring/api start",
+    "api:test": "pnpm --filter @proctoring/api test",
+    "web:build": "pnpm --filter @proctoring/web build",
+    "web:dev": "pnpm --filter @proctoring/web dev",
+    "test": "pnpm -r test"
+  }
+}
