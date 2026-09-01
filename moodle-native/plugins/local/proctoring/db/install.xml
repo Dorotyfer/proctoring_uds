@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/proctoring/db" VERSION="2026090104" COMMENT="Native Moodle proctoring">
+<XMLDB PATH="local/proctoring/db" VERSION="2026090105" COMMENT="Native Moodle proctoring">
   <TABLES>
     <TABLE NAME="local_proctoring_policy" COMMENT="Versioned proctoring policy per quiz">
       <FIELDS>
@@ -284,7 +284,7 @@
         <KEY NAME="actor_fk" TYPE="foreign" FIELDS="actorid" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="migration_source_uix" UNIQUE="true" FIELDS="migrationversion, sourcecomponent, sourcekey, quizid, targetkey"/>
+        <INDEX NAME="migration_source_uix" UNIQUE="true" FIELDS="migrationversion, sourcekey, quizid"/>
         <INDEX NAME="migration_status_idx" UNIQUE="false" FIELDS="migrationversion, status"/>
       </INDEXES>
     </TABLE>

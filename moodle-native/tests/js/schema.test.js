@@ -29,7 +29,7 @@ test('native upgrade installs the schema for an already registered legacy plugin
   const upgrade = await readFile(new URL('db/upgrade.php', root), 'utf8');
   const xml = await readFile(new URL('db/install.xml', root), 'utf8');
 
-  assert.match(version, /\$plugin->version\s*=\s*2026090104/);
+  assert.match(version, /\$plugin->version\s*=\s*2026090105/);
   assert.match(upgrade, /install_one_table_from_xmldb_file/);
   assert.match(upgrade, /upgrade_plugin_savepoint/);
   assert.match(xml, /NAME="local_proctoring_migration"/);

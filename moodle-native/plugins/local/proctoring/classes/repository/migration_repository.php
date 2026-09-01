@@ -32,7 +32,6 @@ final class migration_repository {
             'migrationversion' => $migrationversion,
             'sourcekey' => $sourcekey,
             'quizid' => $quizid,
-            'targetkey' => $targetkey,
         ];
         return $this->db->get_record('local_proctoring_migration', $params) ?: null;
     }

@@ -49,5 +49,9 @@ function xmldb_local_proctoring_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026090104, 'local', 'proctoring');
     }
 
+    if ($oldversion < 2026090105) {
+        upgrade_plugin_savepoint(true, 2026090105, 'local', 'proctoring');
+    }
+
     return true;
 }
