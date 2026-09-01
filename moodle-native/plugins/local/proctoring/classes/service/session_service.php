@@ -79,6 +79,14 @@ class session_service {
     $records = $this->db->get_records('local_proctoring_policy', ['quizid' => $quizid], 'timecreated DESC', '*', 0, 1);
     $record = reset($records);
     if (!$record) {
+      $settings = $this->db->get_record('quizaccess_proctoring', ['quizid' => $quizid]);
+      if ($settings && !empty($settings->enabled)) {
+        $policy = json_decode((string)$settings->policyjson, true) ?: [];
+        $policy['version'] = $settings->policyversion;
+        $policy['devicepolicy'] = $settings->allowedmode;
+        $policy['controllevel'] = $settings->controllevel;
+        return $policy;
+      }
       return [
         'version' => 'native-policy-v1',
         'signals' => [],
