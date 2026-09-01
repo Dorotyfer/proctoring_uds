@@ -30,5 +30,24 @@ function xmldb_local_proctoring_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026090101, 'local', 'proctoring');
     }
 
+    if ($oldversion < 2026090102) {
+        upgrade_plugin_savepoint(true, 2026090102, 'local', 'proctoring');
+    }
+
+    if ($oldversion < 2026090103) {
+        $dbman = $DB->get_manager();
+        if (!$dbman->table_exists(new xmldb_table('local_proctoring_migration'))) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'local_proctoring_migration');
+        }
+        upgrade_plugin_savepoint(true, 2026090103, 'local', 'proctoring');
+    }
+
+    if ($oldversion < 2026090104) {
+        if (file_exists(__DIR__ . '/../classes/service/lti_tool_service.php')) {
+            (new \local_proctoring\service\lti_tool_service($DB))->ensure_registered();
+        }
+        upgrade_plugin_savepoint(true, 2026090104, 'local', 'proctoring');
+    }
+
     return true;
 }

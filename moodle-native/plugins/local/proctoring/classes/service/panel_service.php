@@ -18,6 +18,9 @@ final class panel_service {
     $search = trim((string)($filters['search'] ?? ''));
     $courses = [];
     foreach ($this->db->get_records('course', null, 'fullname ASC', 'id, fullname') as $course) {
+      if (!empty($filters['courseid']) && (int)$filters['courseid'] !== (int)$course->id) {
+        continue;
+      }
       if ($search !== '' && stripos($course->fullname, $search) === false) {
         continue;
       }

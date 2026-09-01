@@ -23,3 +23,11 @@ Feature: Native Moodle proctoring
     When I navigate to "/mod/quiz/accessrule/proctoring/launch.php?attemptid=1"
     Then I should see "Preparación de proctoring"
     And I should see "Preparando la sesión de proctoring"
+
+  Scenario: Proctoring is listed as a course external tool
+    Given I log in as "admin"
+    And I am on the course page for "Native course"
+    When I open the "Más" menu
+    Then I should see "Herramientas externas LTI"
+    When I follow "Herramientas externas LTI"
+    Then I should see "Proctoring"

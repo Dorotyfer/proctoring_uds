@@ -98,6 +98,10 @@ final class quiz_policy_service {
 
     public function save(\stdClass $quiz, int $actorid): array {
         $policy = $this->from_quiz_form($quiz);
+        return $this->save_policy($quiz, $policy, $actorid);
+    }
+
+    public function save_policy(\stdClass $quiz, array $policy, int $actorid): array {
         $validation = policy_schema::normalize($policy);
         if (!$validation['valid']) {
             throw new \moodle_exception('invalidpolicy', 'quizaccess_proctoring', '', implode(', ', $validation['errors']));

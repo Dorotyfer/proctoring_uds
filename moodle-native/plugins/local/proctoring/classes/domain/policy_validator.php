@@ -13,6 +13,7 @@ final class policy_validator {
         'facial_pattern_detected', 'window_blur', 'window_focus', 'fullscreen_exit',
         'page_unload', 'device_mode_mismatch', 'clipboard_activity', 'developer_tools',
         'window_resize', 'phone_detected', 'voice_detected', 'gaze_deviation',
+        'emotion_analysis', 'predictive_analysis',
     ];
 
     public static function validate(array $policy): array {

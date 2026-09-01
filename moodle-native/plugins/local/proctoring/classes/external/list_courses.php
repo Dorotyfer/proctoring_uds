@@ -7,8 +7,8 @@ use local_proctoring\service\panel_service;
 defined('MOODLE_INTERNAL') || die();
 
 final class list_courses extends \external_api {
-  public static function execute(string $search = ''): string {
-    $params = self::validate_parameters(self::execute_parameters(), ['search' => $search]);
+  public static function execute(string $search = '', int $courseid = 0): string {
+    $params = self::validate_parameters(self::execute_parameters(), ['search' => $search, 'courseid' => $courseid]);
     \require_login();
     \require_sesskey();
     return json_encode((new panel_service())->list_courses(\context_system::instance(), $params), JSON_UNESCAPED_UNICODE);
@@ -17,6 +17,7 @@ final class list_courses extends \external_api {
   public static function execute_parameters(): \external_function_parameters {
     return new \external_function_parameters([
       'search' => new \external_value(PARAM_TEXT, '', VALUE_DEFAULT, ''),
+      'courseid' => new \external_value(PARAM_INT, '', VALUE_DEFAULT, 0),
     ]);
   }
 

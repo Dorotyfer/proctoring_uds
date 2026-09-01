@@ -9,7 +9,8 @@ define(['core/ajax'], function(Ajax) {
       return;
     }
     const status = root.querySelector('[data-region="panel-status"]');
-    call('local_proctoring_list_courses', {search: ''}).then((result) => {
+    const courseid = Number(root.dataset.courseid || 0);
+    call('local_proctoring_list_courses', {search: '', courseid}).then((result) => {
       root.querySelector('[data-region="course-list"]').textContent = JSON.stringify(result.courses);
       status.textContent = `${result.total} cursos con actividad de proctoring.`;
     }).catch(() => {

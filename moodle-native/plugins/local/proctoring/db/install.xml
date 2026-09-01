@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/proctoring/db" VERSION="2026090101" COMMENT="Native Moodle proctoring">
+<XMLDB PATH="local/proctoring/db" VERSION="2026090104" COMMENT="Native Moodle proctoring">
   <TABLES>
     <TABLE NAME="local_proctoring_policy" COMMENT="Versioned proctoring policy per quiz">
       <FIELDS>
@@ -264,6 +264,28 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="session_calculated_idx" UNIQUE="false" FIELDS="sessionid, calculatedat"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_proctoring_migration" COMMENT="Redacted legacy migration audit">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="migrationversion" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourcecomponent" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourcekey" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="targetkey" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="mapped" SEQUENCE="false"/>
+        <FIELD NAME="message" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="actor_fk" TYPE="foreign" FIELDS="actorid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="migration_source_uix" UNIQUE="true" FIELDS="migrationversion, sourcecomponent, sourcekey, quizid, targetkey"/>
+        <INDEX NAME="migration_status_idx" UNIQUE="false" FIELDS="migrationversion, status"/>
       </INDEXES>
     </TABLE>
   </TABLES>

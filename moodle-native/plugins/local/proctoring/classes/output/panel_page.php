@@ -16,6 +16,7 @@ final class panel_page implements \renderable, \templatable {
       'title' => $this->data['title'] ?? get_string('panel', 'local_proctoring'),
       'message' => $this->data['message'] ?? '',
       'sesskey' => sesskey(),
+      'courseid' => (int)($this->data['courseid'] ?? 0),
     ];
   }
 }

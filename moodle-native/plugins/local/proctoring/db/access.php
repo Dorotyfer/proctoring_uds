@@ -23,6 +23,11 @@ $capabilities = [
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => ['manager' => CAP_ALLOW]
     ],
+    'local/proctoring:migratelegacy' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => ['manager' => CAP_ALLOW]
+    ],
     'local/proctoring:viewbiometricevidence' => [
         'captype' => 'read',
         'contextlevel' => CONTEXT_SYSTEM,
