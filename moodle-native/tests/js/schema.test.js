@@ -44,6 +44,15 @@ test('legacy repository detects Moodle quiz access rule names on Moodle 4.5', as
   assert.match(repository, /quizaccess_udsmonitor_cfg/);
 });
 
+test('legacy mapper accepts the stored cfg field names', async () => {
+  const mapper = await readFile(new URL('classes/domain/legacy_policy_mapper.php', root), 'utf8');
+
+  assert.match(mapper, /capinterval/);
+  assert.match(mapper, /warningaction/);
+  assert.match(mapper, /thresh_identity_autoclose_seconds/);
+  assert.match(mapper, /event_weights_json/);
+});
+
 test('native domain and repository interfaces exist', async () => {
   const files = [
     'classes/domain/session_state.php',

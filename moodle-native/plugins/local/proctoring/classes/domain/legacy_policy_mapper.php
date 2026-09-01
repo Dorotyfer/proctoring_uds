@@ -23,7 +23,8 @@ final class legacy_policy_mapper {
                     $settings['maximagekb'] = max(1, (int)$value);
                     break;
                 case 'defaultidentitythresh':
-                    $settings['biometricthreshold'] = min(1, max(0, (float)$value));
+                    $threshold = (float)$value;
+                    $settings['biometricthreshold'] = min(1, max(0, $threshold > 1 ? $threshold / 100 : $threshold));
                     break;
                 default:
                     if (!in_array($key, ['encryptionkey'], true)) {
@@ -40,6 +41,7 @@ final class legacy_policy_mapper {
     }
 
     public static function map_quiz(array $source): array {
+        $source = self::normalize_quiz_source($source);
         $policy = policy_schema::defaults();
         $policy['signals'] = [];
         $warnings = [];
@@ -65,7 +67,8 @@ final class legacy_policy_mapper {
             } elseif ($key === 'udsm_identitycheck' || $key === 'udsm_biometricid') {
                 $policy['identity']['enabled'] = !empty($value);
             } elseif ($key === 'udsm_identitythresh') {
-                $policy['identity']['threshold'] = min(1, max(0, (float)$value));
+                $threshold = (float)$value;
+                $policy['identity']['threshold'] = min(1, max(0, $threshold > 1 ? $threshold / 100 : $threshold));
             } elseif ($key === 'udsm_identityautoclose') {
                 $policy['identity']['autoclose'] = !empty($value);
             } elseif ($key === 'udsm_identityautoclosestreak') {
@@ -80,6 +83,22 @@ final class legacy_policy_mapper {
                 $policy['signals']['environment_intrusion'] = ['enabled' => !empty($value)];
             } elseif ($key === 'udsm_predictive') {
                 $policy['signals']['predictive_analysis'] = ['enabled' => !empty($value)];
+            } elseif ($key === 'udsm_strictness_profile') {
+                $policy['controllevel'] = [
+                    'permissive' => 'low',
+                    'strict' => 'high',
+                ][(string)$value] ?? 'medium';
+            } elseif ($key === 'udsm_event_weights_json') {
+                $decoded = json_decode((string)$value, true);
+                if (is_array($decoded)) {
+                    $policy['risk']['weights'] = $decoded;
+                }
+            } elseif ($key === 'udsm_debounce_ms') {
+                $policy['capture']['debounce_ms'] = max(0, (int)$value);
+            } elseif ($key === 'udsm_monitor_cycle_ms') {
+                $policy['capture']['cycle_ms'] = max(1, (int)$value);
+            } elseif (str_starts_with($key, 'udsm_thresh_')) {
+                $policy['risk']['thresholds'][substr($key, 12)] = max(0, (int)$value);
             } elseif (array_key_exists($key, $signalmap)) {
                 $policy['signals'][$signalmap[$key]] = ['enabled' => !empty($value)];
             } elseif (!in_array($key, ['udsm_header', 'udsm_behavior_header', 'udsm_warnings_header', 'udsm_cones_header', 'udsm_v4_header', 'udsm_identity_header'], true)) {
@@ -105,6 +124,31 @@ final class legacy_policy_mapper {
             'udsm_legalevidence', 'udsm_biometricid', 'udsm_identitycheck',
             'udsm_identitythresh', 'udsm_identityautoclose',
             'udsm_identityautoclosestreak', 'udsm_identityautoclosesecs',
+            'udsm_strictness_profile', 'udsm_event_weights_json', 'udsm_debounce_ms',
+            'udsm_monitor_cycle_ms',
         ];
+    }
+
+    private static function normalize_quiz_source(array $source): array {
+        $aliases = [
+            'enabled' => 'udsm_enabled',
+            'capinterval' => 'udsm_interval',
+            'imagewidth' => 'udsm_imagewidth',
+            'warningaction' => 'udsm_action',
+            'notify' => 'udsm_notify',
+            'identitythresh' => 'udsm_identitythresh',
+            'identityautoclosestreak' => 'udsm_identityautoclosestreak',
+            'identityautoclosesecs' => 'udsm_identityautoclosesecs',
+            'thresh_identity_autoclose_streak' => 'udsm_identityautoclosestreak',
+            'thresh_identity_autoclose_seconds' => 'udsm_identityautoclosesecs',
+        ];
+        $normalized = [];
+        foreach ($source as $key => $value) {
+            if (in_array($key, ['id', 'quizid'], true)) {
+                continue;
+            }
+            $normalized[$aliases[$key] ?? (str_starts_with($key, 'udsm_') ? $key : 'udsm_' . $key)] = $value;
+        }
+        return $normalized;
     }
 }
