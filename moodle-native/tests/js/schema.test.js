@@ -28,7 +28,7 @@ test('native upgrade installs the schema for an already registered legacy plugin
   const version = await readFile(new URL('version.php', root), 'utf8');
   const upgrade = await readFile(new URL('db/upgrade.php', root), 'utf8');
 
-  assert.match(version, /\$plugin->version\s*=\s*2026090101/);
+  assert.match(version, /\$plugin->version\s*=\s*2026090102/);
   assert.match(upgrade, /install_one_table_from_xmldb_file/);
   assert.match(upgrade, /upgrade_plugin_savepoint/);
 });

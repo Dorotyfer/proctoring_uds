@@ -11,7 +11,8 @@ final class policy_validator {
         'page_visibility_changed', 'network_disconnected', 'seb_event',
         'attention_signal', 'biometric_monitor_mismatch', 'environment_intrusion',
         'facial_pattern_detected', 'window_blur', 'window_focus', 'fullscreen_exit',
-        'page_unload', 'device_mode_mismatch',
+        'page_unload', 'device_mode_mismatch', 'clipboard_activity', 'developer_tools',
+        'window_resize', 'phone_detected', 'voice_detected', 'gaze_deviation',
     ];
 
     public static function validate(array $policy): array {
@@ -24,7 +25,15 @@ final class policy_validator {
             $signals = [];
         }
 
-        foreach ($signals as $signal) {
+        foreach ($signals as $signaltype => $signalvalue) {
+            if (is_bool($signalvalue) || is_numeric($signalvalue)) {
+                $signal = [
+                    'type' => (string)$signaltype,
+                    'enabled' => (bool)$signalvalue,
+                ];
+            } else {
+                $signal = $signalvalue;
+            }
             if (!is_array($signal)) {
                 $errors[] = 'signal_format';
                 continue;
