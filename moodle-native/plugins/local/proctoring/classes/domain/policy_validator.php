@@ -34,6 +34,9 @@ final class policy_validator {
                 ];
             } else {
                 $signal = $signalvalue;
+                if (is_array($signal) && !isset($signal['type'])) {
+                    $signal['type'] = (string)$signaltype;
+                }
             }
             if (!is_array($signal)) {
                 $errors[] = 'signal_format';

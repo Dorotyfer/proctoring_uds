@@ -53,6 +53,12 @@ test('legacy mapper accepts the stored cfg field names', async () => {
   assert.match(mapper, /event_weights_json/);
 });
 
+test('policy validator accepts associative signal maps', async () => {
+  const validator = await readFile(new URL('classes/domain/policy_validator.php', root), 'utf8');
+
+  assert.match(validator, /!isset\(\$signal\['type'\]\)/);
+});
+
 test('native domain and repository interfaces exist', async () => {
   const files = [
     'classes/domain/session_state.php',
