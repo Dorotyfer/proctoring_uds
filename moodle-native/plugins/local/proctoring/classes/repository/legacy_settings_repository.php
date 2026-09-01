@@ -38,7 +38,7 @@ final class legacy_settings_repository {
             return [];
         }
 
-        foreach (['quizaccess_udsmonitor', 'quizaccess_udsmonitor_settings', 'quizaccess_udsmonitor_config'] as $tablename) {
+        foreach (['quizaccess_udsmonitor_cfg', 'quizaccess_udsmonitor', 'quizaccess_udsmonitor_settings', 'quizaccess_udsmonitor_config'] as $tablename) {
             if (!$this->table_exists($tablename)) {
                 continue;
             }

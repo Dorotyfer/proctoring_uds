@@ -41,6 +41,7 @@ test('legacy repository detects Moodle quiz access rule names on Moodle 4.5', as
   assert.match(repository, /core_component::get_plugin_list\('quizaccess'\)/);
   assert.match(repository, /preg_replace\('\/\^quizaccess_\//);
   assert.match(repository, /array_key_exists\(\$shortname/);
+  assert.match(repository, /quizaccess_udsmonitor_cfg/);
 });
 
 test('native domain and repository interfaces exist', async () => {
