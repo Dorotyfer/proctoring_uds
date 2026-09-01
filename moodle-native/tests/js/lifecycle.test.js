@@ -17,9 +17,11 @@ test('quiz lifecycle is wired to native Moodle observers', async () => {
 test('quiz rule exposes native access enforcement and page setup', async () => {
   const rule = await readFile(new URL('rule.php', root), 'utf8');
   const launch = await readFile(new URL('launch.php', root), 'utf8');
+  const version = await readFile(new URL('version.php', root), 'utf8');
 
   assert.match(rule, /function prevent_access/);
-  assert.match(rule, /function setup_attempt_page/);
+  assert.match(rule, /function setup_attempt_page\(\$page\)\s*\{/);
   assert.match(rule, /quizaccess_proctoring\/launch/);
+  assert.match(version, /\$plugin->version\s*=\s*2026090101/);
   assert.doesNotMatch(launch, /redirect\(|API|remote/i);
 });

@@ -49,7 +49,7 @@ class quizaccess_proctoring extends quiz_access_rule_base {
         return get_string('proctoringrequired', 'quizaccess_proctoring');
     }
 
-    public function setup_attempt_page(\moodle_page $page): void {
+    public function setup_attempt_page($page) {
         $attemptid = optional_param('attemptid', 0, PARAM_INT);
         $page->requires->js_call_amd('quizaccess_proctoring/launch', 'start', [[
             'attemptid' => $attemptid,
