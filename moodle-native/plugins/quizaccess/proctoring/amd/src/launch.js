@@ -1,7 +1,7 @@
-define([], function() {
-    return {
-        start: function() {
-            return true;
-        }
-    };
+define(['local_proctoring/preparation'], function(preparation) {
+  return {
+    start: function(config) {
+      return preparation.start(config);
+    }
+  };
 });
