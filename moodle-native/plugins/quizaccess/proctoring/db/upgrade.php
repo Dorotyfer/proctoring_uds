@@ -15,13 +15,19 @@ function xmldb_quizaccess_proctoring_upgrade(int $oldversion): bool {
         $fields = [
             new xmldb_field('controllevel', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'medium', 'failurepolicy'),
             new xmldb_field('policyversion', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, 'quiz-policy-1', 'controllevel'),
-            new xmldb_field('policyjson', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, '{}', 'policyversion'),
+            new xmldb_field('policyjson', XMLDB_TYPE_TEXT, null, null, null, null, null, 'policyversion'),
         ];
         foreach ($fields as $field) {
             if (!$dbman->field_exists($table, $field)) {
                 $dbman->add_field($table, $field);
             }
         }
+        $DB->execute(
+            'UPDATE {quizaccess_proctoring} SET policyjson = ? WHERE policyjson IS NULL',
+            ['{}']
+        );
+        $policyjson = new xmldb_field('policyjson', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null, 'policyversion');
+        $dbman->change_field_notnull($table, $policyjson);
         upgrade_plugin_savepoint(true, 2026090102, 'quizaccess', 'proctoring');
     }
 
