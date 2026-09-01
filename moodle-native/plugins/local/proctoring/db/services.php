@@ -59,5 +59,40 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'local_proctoring_list_courses' => [
+        'classname' => 'local_proctoring\\external\\list_courses',
+        'methodname' => 'execute',
+        'description' => 'List proctoring courses visible to the current reviewer.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'local_proctoring_list_course_attempts' => [
+        'classname' => 'local_proctoring\\external\\list_course_attempts',
+        'methodname' => 'execute',
+        'description' => 'List scoped proctoring attempts for a course.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'local_proctoring_get_session_detail' => [
+        'classname' => 'local_proctoring\\external\\get_session_detail',
+        'methodname' => 'execute',
+        'description' => 'Read a scoped proctoring session detail.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'local_proctoring_review_alert' => [
+        'classname' => 'local_proctoring\\external\\review_alert',
+        'methodname' => 'execute',
+        'description' => 'Review or dismiss a proctoring alert.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
+    'local_proctoring_reset_biometric_profile' => [
+        'classname' => 'local_proctoring\\external\\reset_biometric_profile',
+        'methodname' => 'execute',
+        'description' => 'Revoke a user biometric profile.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
 ];
 $services = [];
