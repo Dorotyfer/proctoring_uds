@@ -1,6 +1,6 @@
 <?php
 
-require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../../config.php');
 
 require_login();
 $sessionid = required_param('sessionid', PARAM_INT);
