@@ -76,6 +76,18 @@ class session_repository {
     return $session;
   }
 
+  public function prepare_and_activate(int $sessionid, string $devicemode): \stdClass {
+    $session = $this->db->get_record('local_proctoring_session', ['id' => $sessionid], '*', MUST_EXIST);
+    if (!in_array($devicemode, ['browser', 'seb'], true)) {
+      throw new \invalid_parameter_exception('Invalid device mode.');
+    }
+    $session->devicemode = $devicemode;
+    $session->timeprepared = time();
+    $session->timemodified = time();
+    $this->db->update_record('local_proctoring_session', $session);
+    return $this->transition($sessionid, 'active');
+  }
+
   private static function encode(array $value): string {
     return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
   }
